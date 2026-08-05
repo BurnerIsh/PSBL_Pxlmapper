@@ -1,0 +1,1369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PSBL PXLMAPPER</title>
+<style>
+  :root{
+    --bg:#14161b; --panel:#1d2129; --panel2:#252b36; --panel3:#2d3442;
+    --line:#333b4a; --text:#e9ebf0; --dim:#98a1b1; --accent:#4da3ff;
+    --danger:#ff6b6b; --ok:#5ad18f; --warn:#ffb45e;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--bg); color:var(--text);
+    font:13.5px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif;
+    display:flex; height:100vh; overflow:hidden;
+  }
+  ::-webkit-scrollbar{width:10px; height:10px;}
+  ::-webkit-scrollbar-thumb{background:var(--panel3); border-radius:5px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+
+  #rail{width:250px; min-width:250px; background:var(--panel); border-right:1px solid var(--line); display:flex; flex-direction:column;}
+  #rail header{padding:14px 14px 10px;}
+  #rail h1{font-size:15px; letter-spacing:.08em; text-transform:uppercase;}
+  #rail .sub{color:var(--dim); font-size:11px;}
+  .railSection{padding:8px 10px; overflow-y:auto; flex:1;}
+  .projItem, .mapItem{
+    display:flex; align-items:center; gap:6px;
+    padding:7px 9px; border-radius:7px; cursor:pointer; margin-bottom:2px;
+    border:1px solid transparent;
+  }
+  .projItem:hover, .mapItem:hover{background:var(--panel2);}
+  .projItem.active{background:var(--panel3); border-color:var(--accent);}
+  .mapItem.active{background:var(--panel3); border-color:var(--line);}
+  .projItem span, .mapItem span{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .mapItem small{color:var(--dim); font-size:10.5px;}
+  .iconBtn{background:none; border:none; color:var(--dim); cursor:pointer; font-size:13px; padding:2px 5px; border-radius:4px; line-height:1;}
+  .iconBtn:hover{color:var(--text); background:var(--panel3);}
+  .iconBtn.del:hover{color:var(--danger);}
+  #railFooter{padding:10px; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:6px;}
+  .smallBtn{
+    padding:7px 10px; border-radius:6px; border:1px solid var(--line);
+    background:var(--panel2); color:var(--text); cursor:pointer; font-size:12.5px;
+    text-align:center; width:100%;
+  }
+  .smallBtn:hover{border-color:var(--accent);}
+  .smallBtn.primary{background:var(--accent); color:#0a1523; border:none; font-weight:600;}
+  .smallBtn.primary:hover{background:#6cb5ff;}
+
+  #settings{
+    width:335px; min-width:335px; background:var(--panel);
+    border-right:1px solid var(--line); overflow-y:auto; padding:14px 14px 40px; display:none;
+  }
+  #settings.visible{display:block;}
+  fieldset{border:1px solid var(--line); border-radius:8px; padding:11px; margin-bottom:12px;}
+  legend{padding:0 6px; font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim);}
+  label{display:block; font-size:11.5px; color:var(--dim); margin:7px 0 3px;}
+  input[type=text], input[type=number], select{
+    width:100%; background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    border-radius:6px; padding:6px 8px; font-size:13px;
+  }
+  input[type=color]{width:100%; height:28px; border:1px solid var(--line); border-radius:6px; background:var(--panel2); padding:2px; cursor:pointer;}
+  input:focus, select:focus{outline:none; border-color:var(--accent);}
+  input::placeholder{color:#5d6675;}
+  .row{display:flex; gap:8px;}
+  .row > *{flex:1;}
+  .chk{display:flex; align-items:center; gap:8px; margin:6px 0; cursor:pointer;}
+  .chk input{accent-color:var(--accent); width:14px; height:14px; flex:none;}
+  .chk span{font-size:12.5px;}
+  .hint{font-size:11px; color:var(--dim); margin-top:4px;}
+  .stat{background:var(--panel2); border:1px solid var(--line); border-radius:6px; padding:8px 10px; font-size:12px; color:var(--dim); margin-bottom:12px;}
+  .stat b{color:var(--text);}
+  .warn{color:var(--warn);}
+  .ok{color:var(--ok);}
+  .zoneCard{background:var(--panel2); border:1px solid var(--line); border-radius:7px; padding:8px; margin-bottom:8px;}
+  .zoneCard .zHead{display:flex; align-items:center; gap:6px; margin-bottom:4px;}
+  .zoneCard .zHead input[type=text]{flex:1;}
+  .zoneCard .row{margin-top:5px;}
+
+  #main{flex:1; display:flex; flex-direction:column; overflow:hidden;}
+  #topbar{
+    display:flex; align-items:center; gap:14px; padding:9px 16px;
+    border-bottom:1px solid var(--line); background:var(--panel);
+    font-size:12px; color:var(--dim); flex-wrap:wrap;
+  }
+  #topbar b{color:var(--text);}
+  #topbar .spacer{flex:1;}
+  #viewport{flex:1; overflow:auto; display:flex; align-items:center; justify-content:center; padding:22px;}
+  #preview{max-width:100%; max-height:100%; box-shadow:0 8px 40px rgba(0,0,0,.55); border:1px solid var(--line);}
+  #emptyState{color:var(--dim); text-align:center; font-size:14px; max-width:340px; line-height:1.7;}
+  #savedFlash{
+    position:fixed; bottom:16px; right:16px; background:var(--panel3);
+    border:1px solid var(--ok); color:var(--ok); padding:7px 14px; border-radius:7px;
+    font-size:12.5px; opacity:0; transition:opacity .25s; pointer-events:none; z-index:99;
+  }
+  #savedFlash.show{opacity:1;}
+</style>
+</head>
+<body>
+
+<!-- ============ PROJECTS RAIL ============ -->
+<div id="rail">
+  <header>
+    <h1>PSBL PXLMAPPER</h1>
+    <div class="sub">PSBL · LED pixelmap studio</div>
+  </header>
+  <div class="railSection" id="railList"></div>
+  <div id="railFooter">
+    <button class="smallBtn primary" id="btnNewProject">+ New project</button>
+    <div class="row">
+      <button class="smallBtn" id="btnExportProj">Export project</button>
+      <button class="smallBtn" id="btnImportProj">Import</button>
+    </div>
+    <input type="file" id="importFile" accept=".json" style="display:none">
+  </div>
+</div>
+
+<!-- ============ SETTINGS ============ -->
+<div id="settings">
+  <fieldset>
+    <legend>Identity</legend>
+    <label>Pixelmap name</label>
+    <input type="text" data-k="mapName">
+    <div class="chk"><input type="checkbox" data-k="showBadge"><span>Show center info badge</span></div>
+    <div class="chk"><input type="checkbox" data-k="showDims"><span>Badge: show W × H</span></div>
+    <div class="chk"><input type="checkbox" data-k="showGridInfo"><span>Badge: show grid / tile info</span></div>
+    <div class="row">
+      <div><label>Badge size (%)</label><input type="number" data-k="badgeScale" min="30" max="300" step="5"></div>
+      <div><label>Badge opacity (%)</label><input type="number" data-k="badgeOpacity" min="10" max="100" step="5"></div>
+    </div>
+    <label>Badge border color</label>
+    <input type="color" data-k="badgeBorder">
+  </fieldset>
+
+  <fieldset>
+    <legend>Canvas</legend>
+    <div class="row">
+      <div><label>Width (px)</label><input type="number" data-k="canvasW" min="16" step="1"></div>
+      <div><label>Height (px)</label><input type="number" data-k="canvasH" min="16" step="1"></div>
+    </div>
+    <label>Background (empty areas)</label>
+    <input type="color" data-k="bgColor">
+  </fieldset>
+
+  <fieldset>
+    <legend>Tile grid (base)</legend>
+    <label>Grid mode</label>
+    <select data-k="gridMode">
+      <option value="tile">By tile size (px)</option>
+      <option value="count">By column / row count</option>
+    </select>
+    <div id="tileInputs">
+      <label>Common LED tile presets</label>
+      <select id="tilePreset">
+        <option value="custom">Custom…</option>
+        <option value="64">64 × 64 — P7.8 · 500mm</option>
+        <option value="104">104 × 104 — P4.8 · 500mm</option>
+        <option value="128">128 × 128 — P3.9 · 500mm</option>
+        <option value="168">168 × 168 — P2.9 · 500mm</option>
+        <option value="192">192 × 192 — P2.6 · 500mm</option>
+        <option value="200">200 × 200 — P2.5 · 500mm</option>
+        <option value="208">208 × 208 — P2.4 · 500mm</option>
+        <option value="250">250 × 250 — P2.0 · 500mm</option>
+        <option value="260">260 × 260 — P1.9 · 500mm</option>
+        <option value="312">312 × 312 — P1.9 · 600mm</option>
+      </select>
+      <div class="row">
+        <div><label>Tile W (px)</label><input type="number" data-k="tileW" min="4" step="1"></div>
+        <div><label>Tile H (px)</label><input type="number" data-k="tileH" min="4" step="1"></div>
+      </div>
+    </div>
+    <div id="countInputs" style="display:none">
+      <div class="row">
+        <div><label>Columns</label><input type="number" data-k="colCount" min="1" step="1"></div>
+        <div><label>Rows</label><input type="number" data-k="rowCount" min="1" step="1"></div>
+      </div>
+    </div>
+    <div class="hint">Zones without their own tile counts inherit this grid.</div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Irregular rows &amp; missing tiles</legend>
+    <div class="chk"><input type="checkbox" data-k="irregularEnabled"><span><b>Custom row heights</b></span></div>
+    <div id="rowControls" style="display:none">
+      <div class="hint" style="margin-bottom:6px">Each row gets its own pixel height, and optionally its own tile width (for double-size cabinets). Leave Tile W blank to inherit the base tile width.</div>
+      <div id="rowList"></div>
+      <div class="row">
+        <button class="smallBtn" id="btnAddRow">+ Add row</button>
+        <button class="smallBtn" id="btnGenRows">Generate from tile size</button>
+      </div>
+      <div class="hint" id="rowHint"></div>
+    </div>
+    <button class="smallBtn" id="btnTileEdit" style="margin-top:8px">✎ Edit tiles: OFF — click to enable</button>
+    <div class="hint">When ON, click tiles in the preview to remove or restore them (removed tiles show the background color — for staircase edges and unfilled rows). Works in any grid mode.</div>
+    <button class="smallBtn" id="btnClearSkipped" style="margin-top:6px">Restore all removed tiles</button>
+  </fieldset>
+
+  <fieldset>
+    <legend>Zones</legend>
+    <div class="chk"><input type="checkbox" data-k="zonesEnabled"><span><b>Enable zones</b></span></div>
+    <div id="zoneControls">
+      <div class="hint" style="margin-bottom:6px">Zones are placed left → right at their exact pixel widths. Any unassigned width on the right uses the base colors. Leave Cols/Rows blank to inherit the base grid.</div>
+      <div id="zoneList"></div>
+      <button class="smallBtn" id="btnAddZone">+ Add zone</button>
+      <div class="hint" id="zoneHint"></div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Base colors</legend>
+    <label>Color scheme presets</label>
+    <select id="colorPreset">
+      <option value="custom">Custom…</option>
+      <option value="navy">Navy (reference style)</option>
+      <option value="steelblue">Steel blue</option>
+      <option value="teal">Teal</option>
+      <option value="green">Green</option>
+      <option value="magenta">Magenta / pink</option>
+      <option value="purple">Purple</option>
+      <option value="orange">Orange</option>
+      <option value="red">Red</option>
+      <option value="graydark">Gray — dark</option>
+      <option value="graylight">Gray — light</option>
+    </select>
+    <div class="row">
+      <div><label>Tile color A</label><input type="color" data-k="colorA"></div>
+      <div><label>Tile color B</label><input type="color" data-k="colorB"></div>
+    </div>
+    <label>Pattern</label>
+    <select data-k="checkerMode">
+      <option value="checker">Checkerboard A/B</option>
+      <option value="columns">Alternate columns</option>
+      <option value="rows">Alternate rows</option>
+      <option value="solid">Solid (color A)</option>
+    </select>
+    <div class="row">
+      <div><label>Label color</label><input type="color" data-k="labelColor"></div>
+      <div><label>Guide color</label><input type="color" data-k="guideColor"></div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Tile labels</legend>
+    <label>Numbering</label>
+    <select data-k="numberMode">
+      <option value="letterRow">Letter row + number (A01, A02… B01…)</option>
+      <option value="seq">Sequential (001, 002…)</option>
+      <option value="rowcol">Row-Col (R1C1…)</option>
+      <option value="colRow2">Col over Row, stacked (01 ⏎ 04)</option>
+      <option value="none">No numbers</option>
+    </select>
+    <label>Corner tag (optional, e.g. processor/port like "S21")</label>
+    <input type="text" data-k="cornerTag" placeholder="leave blank for none">
+    <div class="chk"><input type="checkbox" data-k="restartPerZone"><span>Restart column numbers per zone</span></div>
+    <div class="chk"><input type="checkbox" data-k="tileDiag"><span>Per-tile corner diagonals</span></div>
+    <label>Label size (% of tile height)</label>
+    <input type="number" data-k="labelScale" min="8" max="60" step="1">
+  </fieldset>
+
+  <fieldset>
+    <legend>Edge headers</legend>
+    <div class="chk"><input type="checkbox" data-k="edgeHeaders"><span>Row letters / column numbers along edges</span></div>
+    <div class="hint">Slim band on top &amp; left. With mixed per-zone grids, the left band follows the first zone's rows.</div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Guides</legend>
+    <div class="chk"><input type="checkbox" data-k="gFullDiag"><span>Full-frame corner diagonals (X)</span></div>
+    <div class="chk"><input type="checkbox" data-k="gCross"><span>Center crosshair</span></div>
+    <div class="chk"><input type="checkbox" data-k="gCircleH"><span>Circle — fit to height</span></div>
+    <div class="chk"><input type="checkbox" data-k="gCircleHalf"><span>Circle — half height</span></div>
+    <div class="chk"><input type="checkbox" data-k="gZoneCircles"><span>Circle per zone</span></div>
+    <div class="chk"><input type="checkbox" data-k="gDashed"><span>Dashed guide lines</span></div>
+    <label>Guide line width (px)</label>
+    <input type="number" data-k="guideWidth" min="1" max="24" step="1">
+  </fieldset>
+
+  <fieldset>
+    <legend>Export destination</legend>
+    <button class="smallBtn" id="btnChooseFolder">Choose export folder…</button>
+    <div class="hint" id="folderStatus">No folder set — exports use normal browser downloads.</div>
+  </fieldset>
+
+  <div class="stat" id="statBox"></div>
+  <button class="smallBtn primary" id="btnExportPNG" style="margin-bottom:6px">Export this map as PNG</button>
+  <button class="smallBtn" id="btnExportZones" style="margin-bottom:6px; display:none">Export each zone separately</button>
+  <div class="chk" id="zoneBadgeRow" style="display:none"><input type="checkbox" data-k="zoneBadge"><span>Zone exports: include zone name badge</span></div>
+  <button class="smallBtn" id="btnExportAll">Export all maps in project</button>
+  <div class="hint" style="margin-top:8px">PNGs export at exact canvas resolution. Projects auto-save in this browser; use Export project for a backup file you can keep with the show folder.</div>
+</div>
+
+<!-- ============ MAIN ============ -->
+<div id="main">
+  <div id="topbar">
+    <span>Project: <b id="tbProject">—</b></span>
+    <span>Map: <b id="tbMap">—</b></span>
+    <span id="tbSize"></span>
+    <span id="tbGrid"></span>
+    <span class="spacer"></span>
+    <span id="tbSaved" style="font-size:11px"></span>
+  </div>
+  <div id="viewport">
+    <div id="emptyState">
+      <b>No pixelmap selected.</b><br><br>
+      Create a project on the left, then add a map to it.
+      Your known screens are pre-loaded as a starter project the first time you open this.
+    </div>
+    <canvas id="preview" style="display:none"></canvas>
+  </div>
+</div>
+
+<div id="savedFlash">Saved</div>
+
+<script>
+/* =============== state & persistence =============== */
+const STORE_KEY = 'pixelmapStudio_v1';
+let state = null;
+let storageOK = true;
+
+function defaultMap(name){
+  return {
+    id: uid(), mapName: name || 'NEW_MAP',
+    canvasW: 2352, canvasH: 1344,
+    gridMode: 'tile', tileW: 168, tileH: 168, colCount: 14, rowCount: 8,
+    zonesEnabled: false, zones: [],
+    colorA: '#2b4a68', colorB: '#22374d', checkerMode: 'checker',
+    labelColor: '#dfe3e8', guideColor: '#ffffff',
+    numberMode: 'letterRow', restartPerZone: false, tileDiag: true, labelScale: 26,
+    edgeHeaders: false,
+    showBadge: true, showDims: true, showGridInfo: true,
+    badgeScale: 100, badgeOpacity: 92, zoneBadge: true, badgeBorder: '#ffffff',
+    bgColor: '#000000', cornerTag: '',
+    irregularEnabled: false, rowsDef: [], skipped: {},
+    gFullDiag: true, gCross: true, gCircleH: true, gCircleHalf: true,
+    gZoneCircles: false, gDashed: true, guideWidth: 3
+  };
+}
+
+function starterState(){
+  const p1 = { id: uid(), name: 'Example show', maps: [] };
+  const m1 = defaultMap('CENTER_STAGE_COMBINED');
+  m1.canvasW = 4032; m1.canvasH = 1344; m1.zonesEnabled = true;
+  m1.zones = [
+    { name:'2.2', width:840,  cols:0, rows:0, colorA:'#8aabda', colorB:'#7396c7' },
+    { name:'2.1', width:2352, cols:0, rows:0, colorA:'#8accca', colorB:'#72b7b4' },
+    { name:'2.3', width:840,  cols:0, rows:0, colorA:'#8aabda', colorB:'#7396c7' }
+  ];
+  const m2 = defaultMap('STAGE_WINGS_COMBINED');
+  m2.canvasW = 9072; m2.canvasH = 1512; m2.zonesEnabled = true;
+  m2.zones = [
+    { name:'4.1', width:1176, cols:0, rows:0, colorA:'#ec6ca5', colorB:'#d55a91' },
+    { name:'4.2', width:1008, cols:0, rows:0, colorA:'#af60a2', colorB:'#98518c' },
+    { name:'4.3 / 5.1', width:4704, cols:0, rows:0, colorA:'#8e5ba4', colorB:'#794b8e' },
+    { name:'5.2', width:1008, cols:0, rows:0, colorA:'#af60a2', colorB:'#98518c' },
+    { name:'5.3', width:1176, cols:0, rows:0, colorA:'#ec6ca5', colorB:'#d55a91' }
+  ];
+  const m3 = defaultMap('MAINCENTER');
+  m3.numberMode = 'seq';
+  p1.maps = [m1, m2, m3];
+  return { projects:[p1], activeProject:p1.id, activeMap:m1.id };
+}
+
+function uid(){ return Math.random().toString(36).slice(2,9) + Date.now().toString(36).slice(-4); }
+
+function load(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw){
+      state = JSON.parse(raw);
+      // migrate maps saved by older versions
+      state.projects.forEach(p=>p.maps.forEach(m=>{
+        if (m.zonesEnabled === undefined) m.zonesEnabled = (m.zones && m.zones.length>0);
+        if (m.badgeScale === undefined) m.badgeScale = 100;
+        if (m.badgeOpacity === undefined) m.badgeOpacity = 92;
+        if (m.zoneBadge === undefined) m.zoneBadge = true;
+        if (m.badgeBorder === undefined) m.badgeBorder = '#ffffff';
+        if (m.bgColor === undefined) m.bgColor = '#000000';
+        if (m.cornerTag === undefined) m.cornerTag = '';
+        if (m.irregularEnabled === undefined) m.irregularEnabled = false;
+        if (m.rowsDef === undefined) m.rowsDef = [];
+        if (m.skipped === undefined) m.skipped = {};
+        (m.zones||[]).forEach(z=>{
+          if (z.cols === undefined) z.cols = 0;
+          if (z.rows === undefined) z.rows = 0;
+        });
+      }));
+      return;
+    }
+  }catch(e){ storageOK = false; }
+  state = starterState();
+  save(false);
+}
+let saveTimer = null;
+function save(flash = true){
+  try{
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    if (flash) flashMsg('Saved');
+    document.getElementById('tbSaved').textContent = 'auto-saved';
+  }catch(e){
+    storageOK = false;
+    document.getElementById('tbSaved').textContent = 'storage unavailable — use Export project to save';
+  }
+}
+function flashMsg(txt){
+  const el = document.getElementById('savedFlash');
+  el.textContent = txt;
+  el.classList.add('show');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=>el.classList.remove('show'), 1100);
+}
+
+function activeProject(){ return state.projects.find(p=>p.id===state.activeProject) || null; }
+function activeMap(){
+  const p = activeProject(); if(!p) return null;
+  return p.maps.find(m=>m.id===state.activeMap) || null;
+}
+
+/* =============== rail UI =============== */
+function renderRail(){
+  const list = document.getElementById('railList');
+  list.innerHTML = '';
+  state.projects.forEach(p=>{
+    const pi = document.createElement('div');
+    pi.className = 'projItem' + (p.id===state.activeProject ? ' active':'');
+    pi.innerHTML = `<span>📁 ${esc(p.name)}</span>`;
+    const ren = mkIcon('✎','Rename project', e=>{ e.stopPropagation();
+      const n = prompt('Project name:', p.name); if(n){ p.name=n; save(); renderAll(); }});
+    const del = mkIcon('🗑','Delete project', e=>{ e.stopPropagation();
+      if(confirm(`Delete project "${p.name}" and all its maps?`)){
+        state.projects = state.projects.filter(x=>x.id!==p.id);
+        if(state.activeProject===p.id){ state.activeProject = state.projects[0]?.id||null; state.activeMap=null; }
+        save(); renderAll();
+      }});
+    del.classList.add('del');
+    pi.append(ren, del);
+    pi.onclick = ()=>{ state.activeProject=p.id; state.activeMap = p.maps[0]?.id||null; save(false); renderAll(); };
+    list.appendChild(pi);
+
+    if (p.id === state.activeProject){
+      p.maps.forEach(m=>{
+        const mi = document.createElement('div');
+        mi.className = 'mapItem' + (m.id===state.activeMap ? ' active':'');
+        mi.style.marginLeft = '14px';
+        mi.innerHTML = `<span>▦ ${esc(m.mapName)}<br><small>${m.canvasW}×${m.canvasH}</small></span>`;
+        const dup = mkIcon('⧉','Duplicate map', e=>{ e.stopPropagation();
+          const copy = JSON.parse(JSON.stringify(m)); copy.id = uid(); copy.mapName = m.mapName + '_COPY';
+          p.maps.push(copy); state.activeMap = copy.id; save(); renderAll(); });
+        const del = mkIcon('🗑','Delete map', e=>{ e.stopPropagation();
+          if(confirm(`Delete map "${m.mapName}"?`)){
+            p.maps = p.maps.filter(x=>x.id!==m.id);
+            if(state.activeMap===m.id) state.activeMap = p.maps[0]?.id||null;
+            save(); renderAll();
+          }});
+        del.classList.add('del');
+        mi.append(dup, del);
+        mi.onclick = ()=>{ state.activeMap=m.id; save(false); renderAll(); };
+        list.appendChild(mi);
+      });
+      const addBtn = document.createElement('button');
+      addBtn.className='smallBtn'; addBtn.style.margin='4px 0 10px 14px'; addBtn.style.width='calc(100% - 14px)';
+      addBtn.textContent = '+ Add map';
+      addBtn.onclick = ()=>{
+        const m = defaultMap('NEW_MAP_' + (p.maps.length+1));
+        p.maps.push(m); state.activeMap = m.id; save(); renderAll();
+      };
+      list.appendChild(addBtn);
+    }
+  });
+}
+function mkIcon(txt,title,fn){
+  const b=document.createElement('button'); b.className='iconBtn'; b.textContent=txt; b.title=title; b.onclick=fn; return b;
+}
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* =============== settings binding =============== */
+const numKeys = ['canvasW','canvasH','tileW','tileH','colCount','rowCount','labelScale','guideWidth','badgeScale','badgeOpacity'];
+
+const COLOR_PRESETS = {
+  navy:      ['#2b4a68', '#22374d'],
+  steelblue: ['#8aabda', '#7396c7'],
+  teal:      ['#3d9d99', '#2e7c79'],
+  green:     ['#4d9958', '#3a7a44'],
+  magenta:   ['#ec6ca5', '#d55a91'],
+  purple:    ['#8e5ba4', '#794b8e'],
+  orange:    ['#e08a3c', '#c4732c'],
+  red:       ['#cf5050', '#b23e3e'],
+  graydark:  ['#3a3f47', '#2c3037'],
+  graylight: ['#b8bec8', '#a2a9b4']
+};
+
+function bindSettings(){
+  document.querySelectorAll('#settings [data-k]').forEach(el=>{
+    el.addEventListener('input', ()=>{
+      const m = activeMap(); if(!m) return;
+      const k = el.dataset.k;
+      if (el.type==='checkbox') m[k] = el.checked;
+      else if (numKeys.includes(k)) m[k] = +el.value || m[k];
+      else m[k] = el.value;
+      if (k==='gridMode') toggleGridInputs(m);
+      if (k==='tileW' || k==='tileH') syncTilePreset(m);
+      if (k==='colorA' || k==='colorB') syncColorPreset(m);
+      if (k==='zonesEnabled') renderSettings();
+      if (k==='irregularEnabled'){
+        if(m.irregularEnabled && !m.rowsDef.length){
+          const th = m.tileH || 168;
+          const n = Math.max(1, Math.round(m.canvasH/th));
+          m.rowsDef = Array.from({length:n}, ()=>({h:th, tileW:0}));
+        }
+        renderSettings();
+      }
+      save(); renderRail(); renderCanvas();
+    });
+  });
+  document.getElementById('tilePreset').addEventListener('change', e=>{
+    const m = activeMap(); if(!m) return;
+    const v = e.target.value;
+    if(v !== 'custom'){
+      m.tileW = +v; m.tileH = +v;
+      document.querySelector('[data-k="tileW"]').value = v;
+      document.querySelector('[data-k="tileH"]').value = v;
+      save(); renderCanvas();
+    }
+  });
+  document.getElementById('colorPreset').addEventListener('change', e=>{
+    const m = activeMap(); if(!m) return;
+    const v = e.target.value;
+    if(v !== 'custom' && COLOR_PRESETS[v]){
+      [m.colorA, m.colorB] = COLOR_PRESETS[v];
+      document.querySelector('[data-k="colorA"]').value = m.colorA;
+      document.querySelector('[data-k="colorB"]').value = m.colorB;
+      save(); renderCanvas();
+    }
+  });
+  document.getElementById('btnAddZone').onclick = ()=>{
+    const m = activeMap(); if(!m) return;
+    const used = m.zones.reduce((a,z)=>a+z.width,0);
+    const remaining = m.canvasW - used;
+    const w = remaining > 0 ? remaining : Math.max(4, Math.round(m.canvasW/4));
+    m.zones.push({ name:'Zone '+(m.zones.length+1), width:w, cols:0, rows:0, colorA:'#8aabda', colorB:'#7396c7' });
+    m.zonesEnabled = true;
+    save(); renderSettings(); renderCanvas();
+  };
+
+  document.getElementById('btnAddRow').onclick = ()=>{
+    const m = activeMap(); if(!m) return;
+    const used = m.rowsDef.reduce((a,r)=>a+r.h,0);
+    const remaining = m.canvasH - used;
+    const h = remaining > 0 ? remaining : (m.tileH || 168);
+    m.rowsDef.push({ h, tileW:0 });
+    m.irregularEnabled = true;
+    save(); renderSettings(); renderCanvas();
+  };
+  document.getElementById('btnGenRows').onclick = ()=>{
+    const m = activeMap(); if(!m) return;
+    const th = m.tileH || 168;
+    const n = Math.max(1, Math.round(m.canvasH/th));
+    m.rowsDef = Array.from({length:n}, ()=>({h:th, tileW:0}));
+    m.irregularEnabled = true;
+    save(); renderSettings(); renderCanvas();
+  };
+  document.getElementById('btnClearSkipped').onclick = ()=>{
+    const m = activeMap(); if(!m) return;
+    m.skipped = {};
+    save(); renderCanvas();
+  };
+  document.getElementById('btnTileEdit').onclick = ()=>{
+    tileEditMode = !tileEditMode;
+    const b = document.getElementById('btnTileEdit');
+    b.textContent = tileEditMode ? '✎ Edit tiles: ON — click tiles in preview' : '✎ Edit tiles: OFF — click to enable';
+    b.style.borderColor = tileEditMode ? 'var(--accent)' : '';
+    b.style.color = tileEditMode ? 'var(--accent)' : '';
+    canvas.style.cursor = tileEditMode ? 'crosshair' : '';
+    renderCanvas();
+  };
+  canvas.addEventListener('click', e=>{
+    if(!tileEditMode) return;
+    const m = activeMap(); if(!m) return;
+    const rect = canvas.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / rect.width * canvas.width;
+    const py = (e.clientY - rect.top) / rect.height * canvas.height;
+    const layout = layoutTiles(m);
+    const hit = layout.tiles.find(t=> px>=t.x && px<t.x+t.w && py>=t.y && py<t.y+t.h);
+    if(!hit) return;
+    const key = `${hit.r}:${hit.c}`;
+    if(m.skipped[key]) delete m.skipped[key];
+    else m.skipped[key] = true;
+    save(); renderCanvas();
+  });
+}
+
+function syncTilePreset(m){
+  const sel = document.getElementById('tilePreset');
+  const match = [...sel.options].find(o=> o.value!=='custom' && +o.value===m.tileW && m.tileW===m.tileH);
+  sel.value = match ? match.value : 'custom';
+}
+function syncColorPreset(m){
+  const sel = document.getElementById('colorPreset');
+  const match = Object.entries(COLOR_PRESETS).find(([k,[a,b]])=>
+    a.toLowerCase()===String(m.colorA).toLowerCase() && b.toLowerCase()===String(m.colorB).toLowerCase());
+  sel.value = match ? match[0] : 'custom';
+}
+
+function toggleGridInputs(m){
+  document.getElementById('tileInputs').style.display = m.gridMode==='tile' ? '' : 'none';
+  document.getElementById('countInputs').style.display = m.gridMode==='tile' ? 'none' : '';
+}
+
+function renderSettings(){
+  const m = activeMap();
+  const panel = document.getElementById('settings');
+  if(!m){ panel.classList.remove('visible'); return; }
+  panel.classList.add('visible');
+  document.querySelectorAll('#settings [data-k]').forEach(el=>{
+    const k = el.dataset.k;
+    if (el.type==='checkbox') el.checked = !!m[k];
+    else el.value = m[k];
+  });
+  toggleGridInputs(m);
+  syncTilePreset(m);
+  syncColorPreset(m);
+
+  document.getElementById('zoneControls').style.display = m.zonesEnabled ? '' : 'none';
+  document.getElementById('rowControls').style.display = m.irregularEnabled ? '' : 'none';
+
+  /* row editor */
+  const rl = document.getElementById('rowList');
+  rl.innerHTML = '';
+  m.rowsDef.forEach((rd,i)=>{
+    const card = document.createElement('div');
+    card.className='zoneCard';
+    card.innerHTML = `
+      <div class="zHead">
+        <span style="font-size:12px;color:var(--dim);min-width:52px">Row ${rowLetter(i)}</span>
+        <button class="iconBtn" title="Move up" data-rmv="${i}" data-dir="-1">▲</button>
+        <button class="iconBtn" title="Move down" data-rmv="${i}" data-dir="1">▼</button>
+        <button class="iconBtn del" title="Remove row" data-rdel="${i}">🗑</button>
+      </div>
+      <div class="row">
+        <div><label>Height px</label><input type="number" min="4" value="${rd.h}" data-ri="${i}" data-rk="h"></div>
+        <div><label>Tile W px</label><input type="number" min="0" value="${rd.tileW||''}" placeholder="inherit" data-ri="${i}" data-rk="tileW"></div>
+      </div>`;
+    rl.appendChild(card);
+  });
+  rl.querySelectorAll('[data-ri]').forEach(el=>{
+    el.addEventListener('input', ()=>{
+      const m2 = activeMap(); if(!m2) return;
+      const rd = m2.rowsDef[+el.dataset.ri]; if(!rd) return;
+      if(el.dataset.rk==='h') rd.h = Math.max(4, +el.value || rd.h);
+      else rd.tileW = Math.max(0, +el.value || 0);
+      save(); renderCanvas(); updateRowHint();
+    });
+  });
+  rl.querySelectorAll('[data-rdel]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const m2 = activeMap(); if(!m2) return;
+      m2.rowsDef.splice(+el.dataset.rdel,1);
+      save(); renderSettings(); renderCanvas();
+    });
+  });
+  rl.querySelectorAll('[data-rmv]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const m2 = activeMap(); if(!m2) return;
+      const i = +el.dataset.rmv, d = +el.dataset.dir, j = i+d;
+      if(j<0 || j>=m2.rowsDef.length) return;
+      [m2.rowsDef[i], m2.rowsDef[j]] = [m2.rowsDef[j], m2.rowsDef[i]];
+      save(); renderSettings(); renderCanvas();
+    });
+  });
+  updateRowHint();
+
+  const zl = document.getElementById('zoneList');
+  zl.innerHTML = '';
+  m.zones.forEach((z,i)=>{
+    const card = document.createElement('div');
+    card.className='zoneCard';
+    card.innerHTML = `
+      <div class="zHead">
+        <input type="text" value="${esc(z.name)}" data-zi="${i}" data-zk="name" placeholder="Zone label">
+        <button class="iconBtn" title="Move left" data-zmv="${i}" data-dir="-1">◀</button>
+        <button class="iconBtn" title="Move right" data-zmv="${i}" data-dir="1">▶</button>
+        <button class="iconBtn del" title="Remove zone" data-zdel="${i}">🗑</button>
+      </div>
+      <div class="row">
+        <div><label>Width px</label><input type="number" min="4" value="${z.width}" data-zi="${i}" data-zk="width"></div>
+        <div><label>Cols</label><input type="number" min="0" value="${z.cols||''}" placeholder="auto" data-zi="${i}" data-zk="cols"></div>
+        <div><label>Rows</label><input type="number" min="0" value="${z.rows||''}" placeholder="auto" data-zi="${i}" data-zk="rows"></div>
+      </div>
+      <div class="row">
+        <div><label>Color A</label><input type="color" value="${z.colorA}" data-zi="${i}" data-zk="colorA"></div>
+        <div><label>Color B</label><input type="color" value="${z.colorB}" data-zi="${i}" data-zk="colorB"></div>
+      </div>`;
+    zl.appendChild(card);
+  });
+  zl.querySelectorAll('[data-zi]').forEach(el=>{
+    el.addEventListener('input', ()=>{
+      const m2 = activeMap(); if(!m2) return;
+      const z = m2.zones[+el.dataset.zi]; if(!z) return;
+      const k = el.dataset.zk;
+      if (k==='width') z.width = Math.max(4, +el.value || z.width);
+      else if (k==='cols' || k==='rows') z[k] = Math.max(0, +el.value || 0);
+      else z[k] = el.value;
+      save(); renderCanvas(); updateZoneHint();
+    });
+  });
+  zl.querySelectorAll('[data-zdel]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const m2 = activeMap(); if(!m2) return;
+      m2.zones.splice(+el.dataset.zdel,1);
+      save(); renderSettings(); renderCanvas();
+    });
+  });
+  zl.querySelectorAll('[data-zmv]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const m2 = activeMap(); if(!m2) return;
+      const i = +el.dataset.zmv, d = +el.dataset.dir, j = i+d;
+      if(j<0 || j>=m2.zones.length) return;
+      [m2.zones[i], m2.zones[j]] = [m2.zones[j], m2.zones[i]];
+      save(); renderSettings(); renderCanvas();
+    });
+  });
+  updateZoneHint();
+
+  const hasZones = m.zonesEnabled && m.zones.length >= 1;
+  document.getElementById('btnExportZones').style.display = hasZones ? '' : 'none';
+  document.getElementById('zoneBadgeRow').style.display = hasZones ? '' : 'none';
+}
+
+function updateRowHint(){
+  const m = activeMap(); if(!m) return;
+  const el = document.getElementById('rowHint');
+  if(!m.rowsDef.length){ el.textContent = 'No rows yet — add rows or generate them from the base tile size.'; return; }
+  const sum = m.rowsDef.reduce((a,r)=>a+r.h,0);
+  const diff = m.canvasH - sum;
+  if (diff === 0) el.innerHTML = `<span class="ok">Row heights total ${sum}px — canvas fully covered.</span>`;
+  else if (diff > 0) el.innerHTML = `<span class="warn">Rows cover ${sum}px of ${m.canvasH}px — remaining ${diff}px at the bottom uses background.</span>`;
+  else el.innerHTML = `<span class="warn">Rows total ${sum}px — ${-diff}px overflows the canvas and will be clipped.</span>`;
+}
+
+function updateZoneHint(){
+  const m = activeMap(); if(!m) return;
+  const el = document.getElementById('zoneHint');
+  if(!m.zones.length){ el.textContent = 'No zones yet — add one to start splitting the canvas.'; return; }
+  const sum = m.zones.reduce((a,z)=>a+z.width,0);
+  const diff = m.canvasW - sum;
+  if (diff === 0) el.innerHTML = `<span class="ok">Zone widths total ${sum}px — canvas fully covered.</span>`;
+  else if (diff > 0) el.innerHTML = `<span class="warn">Zones cover ${sum}px of ${m.canvasW}px — remaining ${diff}px on the right uses base colors.</span>`;
+  else el.innerHTML = `<span class="warn">Zones total ${sum}px — ${-diff}px overflows the canvas and will be clipped on the right.</span>`;
+}
+
+/* =============== grid computation =============== */
+function rowLetter(r){
+  let s=''; do{ s=String.fromCharCode(65 + (r%26)) + s; r=Math.floor(r/26)-1; }while(r>=0);
+  return s;
+}
+
+function baseGrid(m){
+  const W=m.canvasW, H=m.canvasH;
+  if (m.gridMode==='tile'){
+    return { cols: Math.max(1, Math.round(W/m.tileW)), rows: Math.max(1, Math.round(H/m.tileH)) };
+  }
+  return { cols: Math.max(1,m.colCount), rows: Math.max(1,m.rowCount) };
+}
+
+/* Returns array of zone grid objects covering the canvas left→right.
+   Each: {x, w, cols, rows, cellW, cellH, colorA, colorB, name, implicit} */
+function zoneGrids(m){
+  const W=m.canvasW, H=m.canvasH;
+  const bg = baseGrid(m);
+  const enabled = m.zonesEnabled && m.zones.length>0;
+  const autoColsFor = (w)=> m.gridMode==='tile'
+      ? Math.max(1, Math.round(w/m.tileW))
+      : Math.max(1, Math.round(w / (W/bg.cols)));
+
+  if(!enabled){
+    return [{x:0, w:W, cols:bg.cols, rows:bg.rows, cellW:W/bg.cols, cellH:H/bg.rows,
+             colorA:m.colorA, colorB:m.colorB, name:null, implicit:false}];
+  }
+  const out=[];
+  let x=0;
+  for(const z of m.zones){
+    if(x >= W) break;
+    const w = Math.min(z.width, W-x);
+    const cols = z.cols>0 ? z.cols : autoColsFor(w);
+    const rows = z.rows>0 ? z.rows : bg.rows;
+    out.push({x, w, cols, rows, cellW:w/cols, cellH:H/rows,
+              colorA:z.colorA, colorB:z.colorB, name:z.name, implicit:false});
+    x += w;
+  }
+  if(x < W - 0.5){
+    const w = W - x;
+    out.push({x, w, cols:autoColsFor(w), rows:bg.rows, cellW:w/autoColsFor(w), cellH:H/bg.rows,
+              colorA:m.colorA, colorB:m.colorB, name:null, implicit:true});
+  }
+  return out;
+}
+
+/* Unified tile layout: returns {tiles:[{x,y,w,h,r,c,colorA,colorB}], rows, cols}
+   Handles irregular rows (per-row heights & tile widths) and zone coloring.
+   Skipped tiles are still returned with .skipped=true so hit-testing can restore them. */
+function layoutTiles(m){
+  const W=m.canvasW, H=m.canvasH;
+  const skipped = m.skipped || {};
+  const tiles=[];
+  const colorFor = (cx)=>{
+    if(m.zonesEnabled && m.zones.length){
+      let x=0;
+      for(const z of m.zones){
+        if(cx>=x && cx<x+z.width) return [z.colorA, z.colorB];
+        x+=z.width;
+      }
+    }
+    return [m.colorA, m.colorB];
+  };
+
+  if(m.irregularEnabled && m.rowsDef.length){
+    let y=0;
+    m.rowsDef.forEach((rd,r)=>{
+      if(y>=H) return;
+      const h = Math.min(rd.h, H-y);
+      const tw = (rd.tileW>0 ? rd.tileW : m.tileW) || m.tileW;
+      const cols = Math.max(1, Math.round(W/tw));
+      const cw = W/cols;
+      for(let c=0;c<cols;c++){
+        const [cA,cB]=colorFor(c*cw+cw/2);
+        tiles.push({x:c*cw, y, w:cw, h, r, c, colorA:cA, colorB:cB,
+                    skipped: !!skipped[`${r}:${c}`]});
+      }
+      y+=h;
+    });
+    return {tiles, rows:m.rowsDef.length, cols:Math.max(...tiles.map(t=>t.c+1),1), irregular:true};
+  }
+
+  // regular path: build from zoneGrids
+  const zgs = zoneGrids(m);
+  let colOffset=0;
+  zgs.forEach((zg,zi)=>{
+    for(let r=0;r<zg.rows;r++){
+      for(let c=0;c<zg.cols;c++){
+        tiles.push({x:zg.x+c*zg.cellW, y:r*zg.cellH, w:zg.cellW, h:zg.cellH,
+                    r, c: colOffset+c, cz: c, zi, colorA:zg.colorA, colorB:zg.colorB,
+                    skipped: !!skipped[`${r}:${colOffset+c}`]});
+      }
+    }
+    colOffset += zg.cols;
+  });
+  return {tiles, rows:Math.max(...zgs.map(z=>z.rows)), cols:colOffset, irregular:false, zgs};
+}
+const canvas = document.getElementById('preview');
+const ctx = canvas.getContext('2d');
+let tileEditMode = false;
+
+function renderCanvas(){
+  const m = activeMap();
+  const empty = document.getElementById('emptyState');
+  if(!m){ canvas.style.display='none'; empty.style.display='block'; return; }
+  empty.style.display='none'; canvas.style.display='block';
+
+  const W=m.canvasW, H=m.canvasH;
+  canvas.width=W; canvas.height=H;
+  const zgs = zoneGrids(m);
+  const layout = layoutTiles(m);
+  const drawn = layout.tiles.filter(t=>!t.skipped);
+
+  /* background (shows through where tiles are removed / rows don't cover) */
+  ctx.fillStyle = m.bgColor || '#000000';
+  ctx.fillRect(0,0,W,H);
+
+  /* tiles */
+  drawn.forEach(t=>{
+    let useA;
+    const cc = (t.cz !== undefined && m.restartPerZone) ? t.cz : t.c;
+    if(m.checkerMode==='checker') useA=(t.r+cc)%2===0;
+    else if(m.checkerMode==='columns') useA=cc%2===0;
+    else if(m.checkerMode==='rows') useA=t.r%2===0;
+    else useA=true;
+    ctx.fillStyle = useA ? t.colorA : t.colorB;
+    ctx.fillRect(Math.floor(t.x), Math.floor(t.y), Math.ceil(t.w)+1, Math.ceil(t.h)+1);
+  });
+
+  /* tile borders + diagonals */
+  drawn.forEach(t=>{
+    ctx.lineWidth = Math.max(1, Math.round(Math.min(t.w,t.h)*0.012));
+    ctx.strokeStyle='rgba(0,0,0,0.42)';
+    ctx.strokeRect(t.x,t.y,t.w,t.h);
+    if(m.tileDiag){
+      ctx.save();
+      ctx.strokeStyle='rgba(255,255,255,0.10)';
+      ctx.beginPath();
+      ctx.moveTo(t.x,t.y); ctx.lineTo(t.x+t.w,t.y+t.h);
+      ctx.moveTo(t.x+t.w,t.y); ctx.lineTo(t.x,t.y+t.h);
+      ctx.stroke();
+      ctx.restore();
+    }
+  });
+
+  /* tile-edit mode: mark removed tiles faintly so they can be clicked back */
+  if(tileEditMode){
+    layout.tiles.filter(t=>t.skipped).forEach(t=>{
+      ctx.save();
+      ctx.strokeStyle='rgba(255,255,255,0.25)';
+      ctx.setLineDash([6,6]);
+      ctx.lineWidth=1.5;
+      ctx.strokeRect(t.x+2,t.y+2,t.w-4,t.h-4);
+      ctx.restore();
+    });
+  }
+
+  /* zone boundary lines */
+  if(!layout.irregular && zgs.length>1){
+    ctx.save();
+    ctx.strokeStyle='rgba(0,0,0,0.6)';
+    ctx.lineWidth=Math.max(2, m.guideWidth);
+    zgs.slice(1).forEach(zg=>{
+      ctx.beginPath(); ctx.moveTo(zg.x,0); ctx.lineTo(zg.x,H); ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  /* tile labels */
+  if(m.numberMode!=='none'){
+    ctx.save();
+    const totalCols = layout.cols;
+    const padSeq = Math.max(3, String(drawn.length).length);
+    const padCol = Math.max(2, String(totalCols).length);
+    let seqN = 1;
+    drawn.forEach(t=>{
+      const fs = Math.max(8, t.h*((m.labelScale||26)/100));
+      ctx.font=`bold ${fs}px "Segoe UI", Arial, sans-serif`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.shadowColor='rgba(0,0,0,0.55)'; ctx.shadowBlur=fs*0.12; ctx.shadowOffsetY=fs*0.05;
+      ctx.fillStyle=m.labelColor;
+      const colN = (t.cz !== undefined && m.restartPerZone && zgs.length>1) ? (t.cz+1) : (t.c+1);
+      const cx = t.x+t.w/2, cy = t.y+t.h/2;
+      if(m.numberMode==='seq'){
+        ctx.fillText(String(seqN).padStart(padSeq,'0'), cx, cy);
+      } else if(m.numberMode==='letterRow'){
+        ctx.fillText(rowLetter(t.r) + String(colN).padStart(padCol,'0'), cx, cy);
+      } else if(m.numberMode==='colRow2'){
+        ctx.fillText(String(colN).padStart(2,'0'), cx, cy - fs*0.55);
+        ctx.fillText(String(t.r+1).padStart(2,'0'), cx, cy + fs*0.55);
+      } else {
+        ctx.fillText(`R${t.r+1}C${colN}`, cx, cy);
+      }
+      seqN++;
+    });
+    ctx.restore();
+  }
+
+  /* per-tile corner tag (e.g. processor/port "S21") */
+  if(m.cornerTag){
+    ctx.save();
+    drawn.forEach(t=>{
+      const fs = Math.max(7, Math.min(t.w,t.h)*0.10);
+      ctx.font=`bold ${fs}px "Segoe UI", Arial, sans-serif`;
+      ctx.textAlign='left'; ctx.textBaseline='top';
+      ctx.fillStyle='rgba(255,255,255,0.55)';
+      ctx.fillText(m.cornerTag, t.x + t.w*0.04, t.y + t.h*0.03);
+    });
+    ctx.restore();
+  }
+
+  /* edge headers */
+  if(m.edgeHeaders){
+    const first = zgs[0];
+    const hs = Math.max(10, Math.min(first.cellW,first.cellH)*0.22);
+    ctx.save();
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillStyle='rgba(0,0,0,0.55)';
+    ctx.fillRect(0,0,W,hs);
+    ctx.fillRect(0,0,hs,H);
+    ctx.fillStyle='#ffffff';
+    if(layout.irregular){
+      // columns from first defined row; row letters at each row's vertical center
+      const rd0 = m.rowsDef[0];
+      const tw0 = (rd0 && rd0.tileW>0 ? rd0.tileW : m.tileW) || m.tileW;
+      const cols0 = Math.max(1, Math.round(W/tw0));
+      const cw0 = W/cols0;
+      ctx.font=`bold ${Math.max(8, Math.min(hs*0.62, cw0*0.4))}px "Segoe UI", Arial, sans-serif`;
+      for(let c=0;c<cols0;c++) ctx.fillText(String(c+1), c*cw0+cw0/2, hs/2);
+      ctx.font=`bold ${hs*0.62}px "Segoe UI", Arial, sans-serif`;
+      let y=0;
+      m.rowsDef.forEach((rd,r)=>{
+        const h = Math.min(rd.h, H-y); if(h<=0) return;
+        ctx.fillText(rowLetter(r), hs/2, y+h/2);
+        y+=h;
+      });
+    } else {
+      let colOffset = 0;
+      zgs.forEach(zg=>{
+        ctx.font=`bold ${Math.max(8, Math.min(hs*0.62, zg.cellW*0.4))}px "Segoe UI", Arial, sans-serif`;
+        for(let c=0;c<zg.cols;c++){
+          const colN = (m.restartPerZone && zgs.length>1) ? (c+1) : (colOffset + c + 1);
+          ctx.fillText(String(colN), zg.x + c*zg.cellW + zg.cellW/2, hs/2);
+        }
+        colOffset += zg.cols;
+      });
+      ctx.font=`bold ${hs*0.62}px "Segoe UI", Arial, sans-serif`;
+      for(let r=0;r<first.rows;r++) ctx.fillText(rowLetter(r), hs/2, r*first.cellH + first.cellH/2);
+    }
+    ctx.restore();
+  }
+
+  /* guides */
+  const gw=Math.max(1,m.guideWidth);
+  ctx.strokeStyle=m.guideColor; ctx.lineWidth=gw;
+  ctx.setLineDash(m.gDashed ? [gw*4, gw*3] : []);
+  if(m.gFullDiag){
+    ctx.beginPath();
+    ctx.moveTo(0,0); ctx.lineTo(W,H);
+    ctx.moveTo(W,0); ctx.lineTo(0,H);
+    ctx.stroke();
+  }
+  if(m.gCircleH){ ctx.beginPath(); ctx.arc(W/2,H/2,H/2,0,Math.PI*2); ctx.stroke(); }
+  if(m.gCircleHalf){ ctx.beginPath(); ctx.arc(W/2,H/2,H/4,0,Math.PI*2); ctx.stroke(); }
+  if(m.gZoneCircles && zgs.length>1){
+    zgs.forEach(zg=>{
+      const r = Math.min(zg.w,H)/2;
+      ctx.beginPath(); ctx.arc(zg.x+zg.w/2, H/2, r, 0, Math.PI*2); ctx.stroke();
+    });
+  }
+  ctx.setLineDash([]);
+  if(m.gCross){
+    ctx.beginPath();
+    ctx.moveTo(W/2,0); ctx.lineTo(W/2,H);
+    ctx.moveTo(0,H/2); ctx.lineTo(W,H/2);
+    ctx.stroke();
+  }
+
+  /* zone name tags */
+  if(zgs.length>1){
+    ctx.save();
+    const zfs = Math.max(14, H*0.045);
+    ctx.font=`bold ${zfs}px "Segoe UI", Arial, sans-serif`;
+    ctx.textAlign='center'; ctx.textBaseline='top';
+    zgs.forEach(zg=>{
+      if(!zg.name) return;
+      const tx = zg.x+zg.w/2, ty = H*0.015;
+      const tw = ctx.measureText(zg.name).width;
+      ctx.fillStyle='rgba(0,0,0,0.55)';
+      const pad=zfs*0.4;
+      rr(ctx, tx-tw/2-pad, ty, tw+pad*2, zfs*1.5, zfs*0.35); ctx.fill();
+      ctx.fillStyle='#ffffff';
+      ctx.fillText(zg.name, tx, ty+zfs*0.25);
+    });
+    ctx.restore();
+  }
+
+  /* badge */
+  if(m.showBadge){
+    ctx.save();
+    const bScale = (m.badgeScale ?? 100)/100;
+    ctx.globalAlpha = (m.badgeOpacity ?? 92)/100;
+    const name = m.mapName || 'PIXELMAP';
+    const lines = [];
+    if(m.showDims) lines.push(`W ${W} × H ${H}`);
+    if(m.showGridInfo){
+      const totalTiles = zgs.reduce((a,z)=>a+z.cols*z.rows,0);
+      const t = m.gridMode==='tile' ? ` @ ${m.tileW}×${m.tileH}px` : '';
+      if(zgs.length>1) lines.push(`${totalTiles} tiles across ${zgs.length} zones${t}`);
+      else lines.push(`${zgs[0].cols} × ${zgs[0].rows} tiles (${totalTiles})${t}`);
+    }
+    let nameFs = H*0.075*bScale;
+    let subFs = H*0.038*bScale;
+    ctx.font=`bold ${nameFs}px "Segoe UI", Arial, sans-serif`;
+    let maxW = ctx.measureText(name).width;
+    ctx.font=`${subFs}px "Segoe UI", Arial, sans-serif`;
+    lines.forEach(l=> maxW=Math.max(maxW, ctx.measureText(l).width));
+    const padX = nameFs*0.9, padY = nameFs*0.55;
+    let bw = maxW + padX*2;
+    const capW = Math.min(W*0.92, Math.max(W*0.6, W*0.6*bScale));
+    if(bw>capW){ const s=capW/bw; nameFs*=s; subFs*=s; bw=capW; }
+    const lineGap = subFs*1.55;
+    const bh = padY*2 + nameFs*1.15 + lines.length*lineGap + (lines.length? subFs*0.3 : 0);
+    const bx=W/2-bw/2, by=H/2-bh/2, rad=Math.min(bw,bh)*0.14;
+
+    ctx.shadowColor='rgba(0,0,0,0.5)'; ctx.shadowBlur=H*0.02; ctx.shadowOffsetY=H*0.006;
+    ctx.fillStyle='rgba(15,17,22,0.92)';
+    rr(ctx,bx,by,bw,bh,rad); ctx.fill();
+    ctx.shadowColor='transparent';
+    ctx.strokeStyle=m.badgeBorder || '#ffffff'; ctx.lineWidth=Math.max(1.5,H*0.0022);
+    rr(ctx,bx,by,bw,bh,rad); ctx.stroke();
+
+    ctx.textAlign='center';
+    ctx.fillStyle='#ffffff'; ctx.textBaseline='top';
+    ctx.font=`bold ${nameFs}px "Segoe UI", Arial, sans-serif`;
+    ctx.fillText(name, W/2, by+padY);
+    ctx.fillStyle='rgba(255,255,255,0.75)';
+    ctx.font=`${subFs}px "Segoe UI", Arial, sans-serif`;
+    lines.forEach((l,i)=> ctx.fillText(l, W/2, by+padY+nameFs*1.25 + i*lineGap));
+    ctx.restore();
+  }
+
+  /* stats */
+  const totalTiles = layout.tiles.length;
+  const skippedCount = totalTiles - drawn.length;
+  let s;
+  if(layout.irregular){
+    let y=0;
+    s = m.rowsDef.map((rd,r)=>{
+      const tw = (rd.tileW>0?rd.tileW:m.tileW)||m.tileW;
+      const cols = Math.max(1, Math.round(W/tw));
+      y+=rd.h;
+      return `<b>Row ${rowLetter(r)}</b>: ${cols} tiles · ${r2(W/cols)}×${rd.h}px`;
+    }).join('<br>');
+    const sumH = m.rowsDef.reduce((a,rd)=>a+rd.h,0);
+    s += `<br>Rows total ${sumH}px of ${H}px canvas` +
+         (sumH===H ? ` <span class="ok">— exact.</span>`
+          : sumH<H ? ` <span class="warn">— ${H-sumH}px unfilled at bottom (background).</span>`
+                   : ` <span class="warn">— ${sumH-H}px overflow clipped.</span>`);
+  } else if(zgs.length>1){
+    s = zgs.map(zg=> `<b>${esc(zg.name||'(base)')}</b>: ${zg.cols}×${zg.rows} (${r2(zg.cellW)}×${r2(zg.cellH)}px cells)`).join('<br>');
+  } else {
+    const zg = zgs[0];
+    s = `<b>${zg.cols} × ${zg.rows}</b> grid · cell ${r2(zg.cellW)} × ${r2(zg.cellH)} px`;
+  }
+  s += `<br>Tiles: <b>${drawn.length}</b>` + (skippedCount>0 ? ` (<span class="warn">${skippedCount} removed</span>)` : '');
+  if(!layout.irregular && m.gridMode==='tile'){
+    const inexact = zgs.filter(zg=> Math.abs(zg.cellW - m.tileW) > 0.01 || Math.abs(zg.cellH - m.tileH) > 0.01);
+    if(!inexact.length) s += `<br><span class="ok">All zones exact at ${m.tileW}×${m.tileH}px — no remainder.</span>`;
+    else s += `<br><span class="warn">⚠ ${inexact.length} zone(s) don't divide evenly by ${m.tileW}×${m.tileH}px — cells stretched to fit (see sizes above).</span>`;
+  }
+  document.getElementById('statBox').innerHTML = s;
+  const p = activeProject();
+  document.getElementById('tbProject').textContent = p ? p.name : '—';
+  document.getElementById('tbMap').textContent = m.mapName;
+  document.getElementById('tbSize').textContent = `${W} × ${H} px`;
+  document.getElementById('tbGrid').textContent =
+    layout.irregular ? `${m.rowsDef.length} custom rows · ${drawn.length} tiles`
+    : zgs.length>1 ? `${zgs.length} zones · ${drawn.length} tiles`
+    : `${zgs[0].cols} × ${zgs[0].rows} grid`;
+}
+
+function rr(c,x,y,w,h,r){
+  c.beginPath();
+  c.moveTo(x+r,y);
+  c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r);
+  c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r);
+  c.closePath();
+}
+function r2(v){ return Math.round(v*100)/100; }
+
+/* =============== export destination (File System Access API) =============== */
+let dirHandle = null;
+
+function idb(){
+  return new Promise((res,rej)=>{
+    const rq = indexedDB.open('pixelmapStudioFS',1);
+    rq.onupgradeneeded = ()=> rq.result.createObjectStore('kv');
+    rq.onsuccess = ()=> res(rq.result);
+    rq.onerror = ()=> rej(rq.error);
+  });
+}
+async function idbSet(k,v){
+  const db = await idb();
+  return new Promise((res,rej)=>{
+    const tx = db.transaction('kv','readwrite');
+    tx.objectStore('kv').put(v,k);
+    tx.oncomplete=res; tx.onerror=()=>rej(tx.error);
+  });
+}
+async function idbGet(k){
+  const db = await idb();
+  return new Promise((res,rej)=>{
+    const tx = db.transaction('kv','readonly');
+    const rq = tx.objectStore('kv').get(k);
+    rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error);
+  });
+}
+
+function setFolderStatus(txt, ok){
+  const el = document.getElementById('folderStatus');
+  el.innerHTML = ok ? `<span class="ok">${esc(txt)}</span>` : esc(txt);
+}
+
+async function initFolder(){
+  if(!('showDirectoryPicker' in window)){
+    document.getElementById('btnChooseFolder').disabled = true;
+    setFolderStatus('This browser does not support folder access — exports will use normal downloads. (Chrome/Edge support it.)');
+    return;
+  }
+  try{
+    const h = await idbGet('exportDir');
+    if(h){
+      const perm = await h.queryPermission({mode:'readwrite'});
+      if(perm === 'granted'){ dirHandle = h; setFolderStatus(`Exports save to: ${h.name}/`, true); }
+      else {
+        setFolderStatus(`Folder "${h.name}" remembered — click the button to re-authorize it for this session.`);
+        document.getElementById('btnChooseFolder').dataset.pending = '1';
+      }
+    }
+  }catch(e){ /* no stored handle */ }
+}
+
+document.getElementById('btnChooseFolder').onclick = async ()=>{
+  try{
+    if(document.getElementById('btnChooseFolder').dataset.pending === '1'){
+      const h = await idbGet('exportDir');
+      if(h && (await h.requestPermission({mode:'readwrite'})) === 'granted'){
+        dirHandle = h;
+        delete document.getElementById('btnChooseFolder').dataset.pending;
+        setFolderStatus(`Exports save to: ${h.name}/`, true);
+        return;
+      }
+    }
+    const h = await window.showDirectoryPicker({mode:'readwrite'});
+    dirHandle = h;
+    await idbSet('exportDir', h);
+    setFolderStatus(`Exports save to: ${h.name}/`, true);
+  }catch(e){ /* user cancelled */ }
+};
+
+async function saveBlob(filename, blob){
+  if(dirHandle){
+    try{
+      const fh = await dirHandle.getFileHandle(filename, {create:true});
+      const ws = await fh.createWritable();
+      await ws.write(blob);
+      await ws.close();
+      flashMsg(`Saved ${filename}`);
+      return;
+    }catch(e){ /* fall through to download */ }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 3000);
+}
+
+/* =============== exports =============== */
+function exportMapPNG(m, cb){
+  const prevActive = state.activeMap;
+  state.activeMap = m.id;
+  renderCanvas();
+  canvas.toBlob(blob=>{
+    const nm=(m.mapName||'pixelmap').replace(/[^\w\-]+/g,'_');
+    saveBlob(`${nm}_${m.canvasW}x${m.canvasH}.png`, blob).then(()=>{
+      state.activeMap = prevActive;
+      renderCanvas();
+      if(cb) cb();
+    });
+  },'image/png');
+}
+
+document.getElementById('btnExportPNG').onclick = ()=>{
+  const m=activeMap(); if(m) exportMapPNG(m);
+};
+
+document.getElementById('btnExportZones').onclick = ()=>{
+  const m=activeMap(); if(!m) return;
+  const zgs = zoneGrids(m).filter(z=>!z.implicit);
+  if(zgs.length<1) return;
+  renderCanvas();
+  const H = m.canvasH;
+  let i = 0;
+  const next = ()=>{
+    if(i >= zgs.length) return;
+    const zg = zgs[i++];
+    const zx = Math.round(zg.x), zw = Math.round(zg.w);
+    const off = document.createElement('canvas');
+    off.width = zw; off.height = H;
+    const octx = off.getContext('2d');
+    octx.drawImage(canvas, zx, 0, zw, H, 0, 0, zw, H);
+
+    if(m.zoneBadge !== false){
+      const zName = zg.name || (zg.implicit ? 'BASE' : `Zone ${i}`);
+      const nameFs = Math.max(16, H*0.055);
+      const subFs  = Math.max(11, H*0.03);
+      octx.font = `bold ${nameFs}px "Segoe UI", Arial, sans-serif`;
+      let tw = octx.measureText(zName).width;
+      const dimTxt = `W ${zw} × H ${H} · ${zg.cols}×${zg.rows} tiles`;
+      octx.font = `${subFs}px "Segoe UI", Arial, sans-serif`;
+      tw = Math.max(tw, octx.measureText(dimTxt).width);
+      const padX = nameFs*0.8, padY = nameFs*0.45;
+      let bw = tw + padX*2;
+      if(bw > zw*0.9) bw = zw*0.9;
+      const bh = padY*2 + nameFs*1.1 + subFs*1.6;
+      const bx = zw/2 - bw/2, by = H*0.72 - bh/2;
+      octx.save();
+      octx.globalAlpha = (m.badgeOpacity ?? 92)/100;
+      octx.fillStyle = 'rgba(15,17,22,0.94)';
+      rr(octx, bx, by, bw, bh, Math.min(bw,bh)*0.16); octx.fill();
+      octx.strokeStyle = m.badgeBorder || '#ffffff';
+      octx.lineWidth = Math.max(1.2, H*0.002);
+      rr(octx, bx, by, bw, bh, Math.min(bw,bh)*0.16); octx.stroke();
+      octx.globalAlpha = 1;
+      octx.textAlign = 'center'; octx.textBaseline = 'top';
+      octx.fillStyle = '#ffffff';
+      let nfs = nameFs;
+      octx.font = `bold ${nfs}px "Segoe UI", Arial, sans-serif`;
+      while(octx.measureText(zName).width > bw*0.88 && nfs > 8){
+        nfs *= 0.94;
+        octx.font = `bold ${nfs}px "Segoe UI", Arial, sans-serif`;
+      }
+      octx.fillText(zName, zw/2, by+padY);
+      octx.fillStyle = 'rgba(255,255,255,0.75)';
+      octx.font = `${subFs}px "Segoe UI", Arial, sans-serif`;
+      octx.fillText(dimTxt, zw/2, by+padY+nfs*1.25);
+      octx.restore();
+    }
+
+    off.toBlob(blob=>{
+      const mn = (m.mapName||'pixelmap').replace(/[^\w\-]+/g,'_');
+      const zn = (zg.name||(zg.implicit?'base':'zone'+i)).replace(/[^\w\-]+/g,'_');
+      saveBlob(`${mn}_${zn}_${zw}x${H}.png`, blob).then(()=> setTimeout(next, dirHandle ? 80 : 600));
+    }, 'image/png');
+  };
+  next();
+};
+
+document.getElementById('btnExportAll').onclick = ()=>{
+  const p=activeProject(); if(!p||!p.maps.length) return;
+  let i=0;
+  const next=()=>{ if(i<p.maps.length){ const m=p.maps[i++]; exportMapPNG(m,()=>setTimeout(next, dirHandle ? 80 : 600)); } };
+  next();
+};
+
+/* project export / import */
+document.getElementById('btnExportProj').onclick = ()=>{
+  const p=activeProject(); if(!p){ alert('No project selected.'); return; }
+  const blob=new Blob([JSON.stringify(p,null,2)],{type:'application/json'});
+  saveBlob(`${p.name.replace(/[^\w\-]+/g,'_')}_pixelmaps.json`, blob);
+};
+document.getElementById('btnImportProj').onclick = ()=> document.getElementById('importFile').click();
+document.getElementById('importFile').addEventListener('change', e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const rd=new FileReader();
+  rd.onload = ()=>{
+    try{
+      const p=JSON.parse(rd.result);
+      if(!p.maps || !Array.isArray(p.maps)) throw new Error('bad file');
+      p.id=uid(); p.maps.forEach(mm=>{
+        mm.id=uid();
+        if (mm.zonesEnabled === undefined) mm.zonesEnabled = (mm.zones && mm.zones.length>0);
+        if (mm.bgColor === undefined) mm.bgColor = '#000000';
+        if (mm.cornerTag === undefined) mm.cornerTag = '';
+        if (mm.irregularEnabled === undefined) mm.irregularEnabled = false;
+        if (mm.rowsDef === undefined) mm.rowsDef = [];
+        if (mm.skipped === undefined) mm.skipped = {};
+        (mm.zones||[]).forEach(z=>{ if(z.cols===undefined) z.cols=0; if(z.rows===undefined) z.rows=0; });
+      });
+      state.projects.push(p);
+      state.activeProject=p.id; state.activeMap=p.maps[0]?.id||null;
+      save(); renderAll();
+    }catch(err){ alert('Could not read that file — is it a project export from this tool?'); }
+  };
+  rd.readAsText(f);
+  e.target.value='';
+});
+
+document.getElementById('btnNewProject').onclick = ()=>{
+  const n=prompt('Project name:','New show'); if(!n) return;
+  const p={id:uid(), name:n, maps:[]};
+  state.projects.push(p);
+  state.activeProject=p.id; state.activeMap=null;
+  save(); renderAll();
+};
+
+/* =============== boot =============== */
+function renderAll(){ renderRail(); renderSettings(); renderCanvas(); }
+load();
+bindSettings();
+renderAll();
+initFolder();
+if(!storageOK) document.getElementById('tbSaved').textContent='storage unavailable — use Export project to save';
+</script>
+</body>
+</html>
