@@ -1,0 +1,15 @@
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+*.swp
+
+# Local exports if you ever export PNGs into this folder by mistake
+/exports/
+*.png
+*.jpg
+*.jpeg
+!screenshot*.png

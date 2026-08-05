@@ -95,6 +95,60 @@
     font-size:12.5px; opacity:0; transition:opacity .25s; pointer-events:none; z-index:99;
   }
   #savedFlash.show{opacity:1;}
+
+  /* ---------- folder overview overlay ---------- */
+  #folderOverlay{
+    position:fixed; inset:0; background:var(--bg); z-index:200;
+    display:none; flex-direction:column;
+  }
+  #folderOverlay.open{display:flex;}
+  #folderOverlayBar{
+    display:flex; align-items:center; gap:12px; padding:10px 16px;
+    border-bottom:1px solid var(--line); background:var(--panel); flex-wrap:wrap;
+  }
+  #folderOverlayBar b{font-size:14px;}
+  #folderSearch{
+    width:200px; background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    border-radius:6px; padding:6px 9px; font-size:12.5px;
+  }
+  #folderOverlayBar .smallBtn{width:auto; padding:7px 12px;}
+  #folderBoardWrap{flex:1; overflow:auto; position:relative; background:
+    radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px) 0 0/22px 22px, var(--bg);
+  }
+  #folderBoard{position:relative; width:3600px; height:2400px;}
+  .thumbCard{
+    position:absolute; width:220px; background:var(--panel2); border:1px solid var(--line);
+    border-radius:8px; overflow:hidden; cursor:grab; box-shadow:0 4px 16px rgba(0,0,0,.4);
+    user-select:none;
+  }
+  .thumbCard.dragging{cursor:grabbing; box-shadow:0 10px 30px rgba(0,0,0,.6); z-index:50; border-color:var(--accent);}
+  .thumbCard .thumbImgWrap{
+    width:100%; aspect-ratio:16/9; background:
+      repeating-conic-gradient(#2a2f38 0% 25%, #23272f 0% 50%) 0 0/16px 16px;
+    display:flex; align-items:center; justify-content:center; overflow:hidden;
+  }
+  .thumbCard img{max-width:100%; max-height:100%; pointer-events:none; display:block;}
+  .thumbCard .thumbLabel{
+    padding:6px 9px; font-size:11.5px; color:var(--text); white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis;
+  }
+  .thumbCard .thumbLabel small{display:block; color:var(--dim); font-size:10.5px; margin-top:1px;}
+  #folderEmpty{
+    position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+    text-align:center; color:var(--dim); font-size:13.5px; line-height:1.7;
+  }
+  #folderEmpty.show{display:flex;}
+  #folderBoardWrap.hidden{display:none;}
+
+  /* lightbox */
+  #lightbox{
+    position:fixed; inset:0; background:rgba(0,0,0,.82); z-index:300;
+    display:none; align-items:center; justify-content:center; padding:30px;
+  }
+  #lightbox.open{display:flex;}
+  #lightboxInner{max-width:90vw; max-height:90vh; text-align:center;}
+  #lightboxImg{max-width:90vw; max-height:78vh; border:1px solid var(--line); box-shadow:0 10px 40px rgba(0,0,0,.6);}
+  #lightboxCaption{color:var(--dim); font-size:12.5px; margin:10px 0;}
 </style>
 </head>
 <body>
@@ -280,6 +334,8 @@
     <legend>Export destination</legend>
     <button class="smallBtn" id="btnChooseFolder">Choose export folder…</button>
     <div class="hint" id="folderStatus">No folder set — exports use normal browser downloads.</div>
+    <button class="smallBtn" id="btnViewFolder" style="margin-top:6px">🗂 View folder overview…</button>
+    <div class="hint">Lays out every pixelmap PNG in the chosen folder so you can compare and arrange them.</div>
   </fieldset>
 
   <div class="stat" id="statBox"></div>
@@ -307,6 +363,46 @@
       Your known screens are pre-loaded as a starter project the first time you open this.
     </div>
     <canvas id="preview" style="display:none"></canvas>
+  </div>
+</div>
+
+<!-- ============ FOLDER OVERVIEW OVERLAY ============ -->
+<div id="folderOverlay">
+  <div id="folderOverlayBar">
+    <b id="folderOverlayTitle">Folder overview</b>
+    <span id="folderOverlayCount" style="color:var(--dim); font-size:12px"></span>
+    <span class="spacer"></span>
+    <input type="text" id="folderSearch" placeholder="Filter by filename…">
+    <button class="smallBtn" id="btnRescanFolder">↻ Rescan</button>
+    <button class="smallBtn" id="btnArrangeGrid">Arrange in grid</button>
+    <button class="smallBtn" id="btnCloseFolder">✕ Close</button>
+  </div>
+  <div id="folderBoardWrap">
+    <div id="folderBoard"></div>
+  </div>
+  <div id="folderEmpty">
+    <div id="folderEmptyInner">
+      <div id="emptyTextFolder">
+        <b>No folder loaded yet.</b><br><br>
+        Pick a folder to scan for pixelmap PNGs. This uses the same folder picker as PNG export —
+        if you've already set an export folder, it'll be offered as the default.
+        <br><br>
+      </div>
+      <div id="emptyTextProject" style="display:none">
+        <b>This project has no maps yet.</b><br><br>
+        Close this overview and use "+ Add map" in the sidebar to create one.
+        <br><br>
+      </div>
+      <button class="smallBtn primary" id="btnPickScanFolder">Choose folder to view…</button>
+    </div>
+  </div>
+</div>
+
+<div id="lightbox">
+  <div id="lightboxInner">
+    <img id="lightboxImg">
+    <div id="lightboxCaption"></div>
+    <button class="smallBtn" id="btnLightboxClose">✕ Close</button>
   </div>
 </div>
 
@@ -338,7 +434,7 @@ function defaultMap(name){
 }
 
 function starterState(){
-  const p1 = { id: uid(), name: 'Example show', maps: [] };
+  const p1 = { id: uid(), name: 'Example show', maps: [], overviewLayout: {} };
   const m1 = defaultMap('CENTER_STAGE_COMBINED');
   m1.canvasW = 4032; m1.canvasH = 1344; m1.zonesEnabled = true;
   m1.zones = [
@@ -368,8 +464,10 @@ function load(){
     const raw = localStorage.getItem(STORE_KEY);
     if (raw){
       state = JSON.parse(raw);
-      // migrate maps saved by older versions
-      state.projects.forEach(p=>p.maps.forEach(m=>{
+      // migrate projects saved by older versions
+      state.projects.forEach(p=>{
+        if (p.overviewLayout === undefined) p.overviewLayout = {};
+        p.maps.forEach(m=>{
         if (m.zonesEnabled === undefined) m.zonesEnabled = (m.zones && m.zones.length>0);
         if (m.badgeScale === undefined) m.badgeScale = 100;
         if (m.badgeOpacity === undefined) m.badgeOpacity = 92;
@@ -384,7 +482,8 @@ function load(){
           if (z.cols === undefined) z.cols = 0;
           if (z.rows === undefined) z.rows = 0;
         });
-      }));
+        });
+      });
       return;
     }
   }catch(e){ storageOK = false; }
@@ -423,7 +522,9 @@ function renderRail(){
   state.projects.forEach(p=>{
     const pi = document.createElement('div');
     pi.className = 'projItem' + (p.id===state.activeProject ? ' active':'');
-    pi.innerHTML = `<span>📁 ${esc(p.name)}</span>`;
+    pi.innerHTML = `<span><span class="projFolderIcon" title="View project overview" style="cursor:zoom-in">📁</span> ${esc(p.name)}</span>`;
+    const overview = mkIcon('⊞','Project overview — see all maps, drag to arrange', e=>{ e.stopPropagation();
+      openProjectOverview(p); });
     const ren = mkIcon('✎','Rename project', e=>{ e.stopPropagation();
       const n = prompt('Project name:', p.name); if(n){ p.name=n; save(); renderAll(); }});
     const del = mkIcon('🗑','Delete project', e=>{ e.stopPropagation();
@@ -433,7 +534,8 @@ function renderRail(){
         save(); renderAll();
       }});
     del.classList.add('del');
-    pi.append(ren, del);
+    pi.append(overview, ren, del);
+    pi.querySelector('.projFolderIcon').addEventListener('click', e=>{ e.stopPropagation(); openProjectOverview(p); });
     pi.onclick = ()=>{ state.activeProject=p.id; state.activeMap = p.maps[0]?.id||null; save(false); renderAll(); };
     list.appendChild(pi);
 
@@ -1330,7 +1432,9 @@ document.getElementById('importFile').addEventListener('change', e=>{
     try{
       const p=JSON.parse(rd.result);
       if(!p.maps || !Array.isArray(p.maps)) throw new Error('bad file');
-      p.id=uid(); p.maps.forEach(mm=>{
+      p.id=uid();
+      if (p.overviewLayout === undefined) p.overviewLayout = {};
+      p.maps.forEach(mm=>{
         mm.id=uid();
         if (mm.zonesEnabled === undefined) mm.zonesEnabled = (mm.zones && mm.zones.length>0);
         if (mm.bgColor === undefined) mm.bgColor = '#000000';
@@ -1351,11 +1455,302 @@ document.getElementById('importFile').addEventListener('change', e=>{
 
 document.getElementById('btnNewProject').onclick = ()=>{
   const n=prompt('Project name:','New show'); if(!n) return;
-  const p={id:uid(), name:n, maps:[]};
+  const p={id:uid(), name:n, maps:[], overviewLayout:{}};
   state.projects.push(p);
   state.activeProject=p.id; state.activeMap=null;
   save(); renderAll();
 };
+
+/* =============== folder overview (drag-arrange board) =============== */
+let scanDirHandle = null;
+let folderLayoutKey = null;
+let folderLayout = {};     // {name: {x,y}}
+let folderThumbs = [];     // [{name, url, w, h, mapId?}]
+let boardMode = 'folder';  // 'folder' | 'project'
+let overviewProject = null;
+
+async function loadFolderLayout(key){
+  try{ return (await idbGet('folderLayout:'+key)) || {}; }catch(e){ return {}; }
+}
+async function saveFolderLayoutIdb(){
+  if(!folderLayoutKey) return;
+  try{ await idbSet('folderLayout:'+folderLayoutKey, folderLayout); }catch(e){ /* ignore */ }
+}
+function persistLayout(){
+  if(boardMode==='project' && overviewProject){
+    overviewProject.overviewLayout = folderLayout;
+    save();
+  } else {
+    saveFolderLayoutIdb();
+  }
+}
+
+function setOverlayChrome(mode, label){
+  boardMode = mode;
+  document.getElementById('folderOverlayTitle').textContent = label;
+  document.getElementById('btnPickScanFolder').style.display = mode==='project' ? 'none' : '';
+  document.getElementById('btnRescanFolder').textContent = mode==='project' ? '↻ Refresh thumbnails' : '↻ Rescan';
+  document.getElementById('emptyTextFolder').style.display = mode==='project' ? 'none' : '';
+  document.getElementById('emptyTextProject').style.display = mode==='project' ? '' : 'none';
+}
+
+/* ---- project mode ---- */
+async function openProjectOverview(project){
+  overviewProject = project;
+  document.getElementById('folderOverlay').classList.add('open');
+  setOverlayChrome('project', `Project overview — ${project.name}`);
+  await renderProjectThumbs(project);
+}
+
+function thumbDataURL(srcCanvas, maxW){
+  const scale = Math.min(1, maxW/srcCanvas.width);
+  const w = Math.max(1, Math.round(srcCanvas.width*scale)), h = Math.max(1, Math.round(srcCanvas.height*scale));
+  const off = document.createElement('canvas');
+  off.width=w; off.height=h;
+  off.getContext('2d').drawImage(srcCanvas,0,0,w,h);
+  return off.toDataURL('image/png');
+}
+
+async function renderProjectThumbs(project){
+  const wrap = document.getElementById('folderBoardWrap');
+  const empty = document.getElementById('folderEmpty');
+  document.getElementById('folderOverlayCount').textContent = 'Rendering…';
+  folderThumbs = [];
+
+  if(!project.maps.length){
+    empty.classList.add('show'); wrap.classList.add('hidden');
+    document.getElementById('folderOverlayCount').textContent = '0 maps';
+    return;
+  }
+  empty.classList.remove('show'); wrap.classList.remove('hidden');
+
+  const prevActive = state.activeMap;
+  project.maps.forEach(m=>{
+    state.activeMap = m.id;
+    renderCanvas();
+    const url = thumbDataURL(canvas, 480);
+    folderThumbs.push({name:m.mapName, mapId:m.id, url, w:m.canvasW, h:m.canvasH});
+  });
+  state.activeMap = prevActive;
+  renderCanvas();
+
+  if(!project.overviewLayout) project.overviewLayout = {};
+  folderLayout = project.overviewLayout;
+  document.getElementById('folderOverlayCount').textContent =
+    `${folderThumbs.length} map${folderThumbs.length===1?'':'s'} in "${project.name}"`;
+
+  const hasSaved = folderThumbs.some(t=>folderLayout[t.name]);
+  renderFolderBoard();
+  if(!hasSaved) arrangeFolderGrid();
+  applyFolderFilter();
+}
+
+/* ---- folder mode ---- */
+async function getScanFolder(){
+  // Prefer an already-authorized export folder; else prompt.
+  if(dirHandle){
+    try{
+      const perm = await dirHandle.queryPermission({mode:'read'});
+      if(perm==='granted' || (await dirHandle.requestPermission({mode:'read'}))==='granted'){
+        return dirHandle;
+      }
+    }catch(e){ /* fall through to picker */ }
+  }
+  try{
+    const h = await window.showDirectoryPicker({mode:'read'});
+    return h;
+  }catch(e){ return null; }
+}
+
+async function scanFolder(h){
+  const board = document.getElementById('folderBoard');
+  const wrap = document.getElementById('folderBoardWrap');
+  const empty = document.getElementById('folderEmpty');
+  document.getElementById('folderOverlayCount').textContent = 'Scanning…';
+
+  folderThumbs.forEach(t=>URL.revokeObjectURL(t.url));
+  folderThumbs = [];
+  board.innerHTML = '';
+
+  const exts = ['.png','.jpg','.jpeg'];
+  const files = [];
+  try{
+    for await (const [name, entry] of h.entries()){
+      if(entry.kind==='file' && exts.some(ext=>name.toLowerCase().endsWith(ext))){
+        files.push({name, entry});
+      }
+    }
+  }catch(e){
+    document.getElementById('folderOverlayCount').textContent = 'Could not read folder.';
+    return;
+  }
+  files.sort((a,b)=>a.name.localeCompare(b.name));
+
+  folderLayoutKey = h.name + ':' + files.length + ':' + files.map(f=>f.name).join('|').slice(0,120);
+  folderLayout = await loadFolderLayout(folderLayoutKey);
+
+  if(!files.length){
+    empty.classList.add('show');
+    wrap.classList.add('hidden');
+    document.getElementById('folderOverlayCount').textContent = '0 images';
+    return;
+  }
+  empty.classList.remove('show');
+  wrap.classList.remove('hidden');
+
+  for(const f of files){
+    const file = await f.entry.getFile();
+    const url = URL.createObjectURL(file);
+    const dims = await new Promise(res=>{
+      const img = new Image();
+      img.onload = ()=>res({w:img.naturalWidth, h:img.naturalHeight});
+      img.onerror = ()=>res({w:0,h:0});
+      img.src = url;
+    });
+    folderThumbs.push({name:f.name, url, w:dims.w, h:dims.h});
+  }
+
+  document.getElementById('folderOverlayCount').textContent =
+    `${folderThumbs.length} image${folderThumbs.length===1?'':'s'} · ${h.name}/`;
+
+  const hasSavedLayout = folderThumbs.some(t=>folderLayout[t.name]);
+  renderFolderBoard();
+  if(!hasSavedLayout) arrangeFolderGrid();
+  applyFolderFilter();
+}
+
+function renderFolderBoard(){
+  const board = document.getElementById('folderBoard');
+  board.innerHTML = '';
+  folderThumbs.forEach(t=>{
+    const pos = folderLayout[t.name] || {x:20, y:20};
+    const card = document.createElement('div');
+    card.className = 'thumbCard';
+    card.style.left = pos.x+'px';
+    card.style.top = pos.y+'px';
+    card.dataset.name = t.name;
+    card.innerHTML = `
+      <div class="thumbImgWrap"><img src="${t.url}" loading="lazy"></div>
+      <div class="thumbLabel">${esc(t.name)}<small>${t.w}×${t.h}px</small></div>`;
+    makeDraggable(card);
+    card.querySelector('img').addEventListener('dblclick', ()=>{
+      if(boardMode==='project' && t.mapId){
+        state.activeMap = t.mapId;
+        document.getElementById('folderOverlay').classList.remove('open');
+        save(false); renderAll();
+      } else {
+        openLightbox(t);
+      }
+    });
+    if(boardMode==='project'){
+      card.title = 'Double-click to open this map in the editor';
+    } else {
+      card.title = 'Double-click to preview full size';
+    }
+    board.appendChild(card);
+  });
+  growBoardToFit();
+}
+
+function growBoardToFit(){
+  const board = document.getElementById('folderBoard');
+  let maxX=3600, maxY=2400;
+  document.querySelectorAll('.thumbCard').forEach(c=>{
+    maxX = Math.max(maxX, parseFloat(c.style.left)+260);
+    maxY = Math.max(maxY, parseFloat(c.style.top)+220);
+  });
+  board.style.width = maxX+'px';
+  board.style.height = maxY+'px';
+}
+
+function makeDraggable(card){
+  let sx=0, sy=0, ox=0, oy=0, dragging=false;
+  card.addEventListener('pointerdown', e=>{
+    if(e.target.tagName==='IMG' && e.detail>1) return; // don't start drag on dblclick
+    dragging = true;
+    card.classList.add('dragging');
+    card.setPointerCapture(e.pointerId);
+    sx=e.clientX; sy=e.clientY;
+    ox=parseFloat(card.style.left)||0; oy=parseFloat(card.style.top)||0;
+  });
+  card.addEventListener('pointermove', e=>{
+    if(!dragging) return;
+    const wrap = document.getElementById('folderBoardWrap');
+    const dx=(e.clientX-sx), dy=(e.clientY-sy);
+    let nx=Math.max(0,ox+dx), ny=Math.max(0,oy+dy);
+    card.style.left=nx+'px'; card.style.top=ny+'px';
+  });
+  const end = e=>{
+    if(!dragging) return;
+    dragging=false;
+    card.classList.remove('dragging');
+    const name = card.dataset.name;
+    folderLayout[name] = {x:parseFloat(card.style.left), y:parseFloat(card.style.top)};
+    persistLayout();
+    growBoardToFit();
+  };
+  card.addEventListener('pointerup', end);
+  card.addEventListener('pointercancel', end);
+}
+
+function arrangeFolderGrid(){
+  const cols = Math.max(1, Math.floor((document.getElementById('folderBoardWrap').clientWidth-40)/240));
+  folderThumbs.forEach((t,i)=>{
+    const col = i % cols, row = Math.floor(i/cols);
+    folderLayout[t.name] = {x: 20 + col*240, y: 20 + row*210};
+  });
+  renderFolderBoard();
+  persistLayout();
+}
+
+function applyFolderFilter(){
+  const q = document.getElementById('folderSearch').value.trim().toLowerCase();
+  document.querySelectorAll('.thumbCard').forEach(c=>{
+    c.style.display = (!q || c.dataset.name.toLowerCase().includes(q)) ? '' : 'none';
+  });
+}
+
+function openLightbox(t){
+  document.getElementById('lightboxImg').src = t.url;
+  document.getElementById('lightboxCaption').textContent = `${t.name} — ${t.w} × ${t.h}px`;
+  document.getElementById('lightbox').classList.add('open');
+}
+document.getElementById('btnLightboxClose').onclick = ()=> document.getElementById('lightbox').classList.remove('open');
+document.getElementById('lightbox').addEventListener('click', e=>{
+  if(e.target.id==='lightbox') document.getElementById('lightbox').classList.remove('open');
+});
+
+document.getElementById('btnViewFolder').onclick = async ()=>{
+  document.getElementById('folderOverlay').classList.add('open');
+  setOverlayChrome('folder', 'Folder overview');
+  if(scanDirHandle){
+    scanFolder(scanDirHandle);
+  } else if(dirHandle){
+    scanDirHandle = dirHandle;
+    scanFolder(scanDirHandle);
+  } else {
+    document.getElementById('folderEmpty').classList.add('show');
+    document.getElementById('folderBoardWrap').classList.add('hidden');
+    document.getElementById('folderOverlayCount').textContent = '';
+  }
+};
+document.getElementById('btnPickScanFolder').onclick = async ()=>{
+  const h = await getScanFolder();
+  if(h){ scanDirHandle = h; scanFolder(h); }
+};
+document.getElementById('btnRescanFolder').onclick = ()=>{
+  if(boardMode==='project' && overviewProject) renderProjectThumbs(overviewProject);
+  else if(scanDirHandle) scanFolder(scanDirHandle);
+};
+document.getElementById('btnArrangeGrid').onclick = arrangeFolderGrid;
+document.getElementById('btnCloseFolder').onclick = ()=>{
+  document.getElementById('folderOverlay').classList.remove('open');
+  overviewProject = null;
+};
+document.getElementById('folderSearch').addEventListener('input', applyFolderFilter);
+window.addEventListener('resize', ()=>{
+  if(document.getElementById('folderOverlay').classList.contains('open')) growBoardToFit();
+});
 
 /* =============== boot =============== */
 function renderAll(){ renderRail(); renderSettings(); renderCanvas(); }
