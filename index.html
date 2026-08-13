@@ -255,16 +255,16 @@
       <label>Common LED tile presets</label>
       <select id="tilePreset">
         <option value="custom">Custom…</option>
-        <option value="64">64 × 64 — P7.8 · 500mm</option>
-        <option value="104">104 × 104 — P4.8 · 500mm</option>
-        <option value="128">128 × 128 — P3.9 · 500mm</option>
-        <option value="168">168 × 168 — P2.9 · 500mm</option>
-        <option value="192">192 × 192 — P2.6 · 500mm</option>
-        <option value="200">200 × 200 — P2.5 · 500mm</option>
-        <option value="208">208 × 208 — P2.4 · 500mm</option>
-        <option value="250">250 × 250 — P2.0 · 500mm</option>
-        <option value="260">260 × 260 — P1.9 · 500mm</option>
-        <option value="312">312 × 312 — P1.9 · 600mm</option>
+        <option value="64" data-cabinet-cm="50">64 × 64 — P7.8 · 500mm</option>
+        <option value="104" data-cabinet-cm="50">104 × 104 — P4.8 · 500mm</option>
+        <option value="128" data-cabinet-cm="50">128 × 128 — P3.9 · 500mm</option>
+        <option value="168" data-cabinet-cm="50">168 × 168 — P2.9 · 500mm</option>
+        <option value="192" data-cabinet-cm="50">192 × 192 — P2.6 · 500mm</option>
+        <option value="200" data-cabinet-cm="50">200 × 200 — P2.5 · 500mm</option>
+        <option value="208" data-cabinet-cm="50">208 × 208 — P2.4 · 500mm</option>
+        <option value="250" data-cabinet-cm="50">250 × 250 — P2.0 · 500mm</option>
+        <option value="260" data-cabinet-cm="50">260 × 260 — P1.9 · 500mm</option>
+        <option value="312" data-cabinet-cm="60">312 × 312 — P1.9 · 600mm</option>
       </select>
       <div class="row">
         <div><label>Tile W (px)</label><input type="number" data-k="tileW" min="4" step="1"></div>
@@ -278,6 +278,17 @@
       </div>
     </div>
     <div class="hint">Zones without their own tile counts inherit this grid.</div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Real-world scale</legend>
+    <label>LED tile physical size (cm) — picking a preset above fills this automatically</label>
+    <div class="row">
+      <div><label>Tile width (cm)</label><input type="number" data-k="tilePhysWcm" min="1" step="0.1"></div>
+      <div><label>Tile height (cm)</label><input type="number" data-k="tilePhysHcm" min="1" step="0.1"></div>
+    </div>
+    <div class="hint" id="physicalSizeHint">Physical size: —</div>
+    <div class="hint">This is the physical cabinet size (e.g. 50 × 50cm for a 500mm tile), independent of pixel resolution — set it even if you don't yet know the tile's pixel count. Used for the 3D view's true-to-scale sizing and for Cinema 4D export.</div>
   </fieldset>
 
   <fieldset>
@@ -395,6 +406,7 @@
   <button class="smallBtn" id="btnExportZones" style="margin-bottom:6px; display:none">Export each zone separately</button>
   <div class="chk" id="zoneBadgeRow" style="display:none"><input type="checkbox" data-k="zoneBadge"><span>Zone exports: include zone name badge</span></div>
   <button class="smallBtn" id="btnExportAll">Export all maps in project</button>
+  <button class="smallBtn" id="btnExportC4DSingle" style="margin-top:6px">🎬 Export this map to Cinema 4D (.py)</button>
   <div class="hint" style="margin-top:8px">PNGs export at exact canvas resolution. Projects auto-save in this browser; use Export project for a backup file you can keep with the show folder.</div>
 </div>
 
@@ -438,6 +450,7 @@
       <button class="smallBtn" id="btnArrangeRow3D">Arrange in row</button>
       <button class="smallBtn" id="btnArrangeGrid3D">Arrange in grid</button>
       <button class="smallBtn" id="btnReset3D">Reset camera</button>
+      <button class="smallBtn primary" id="btnExportC4DScene">🎬 Export scene to Cinema 4D (.py)</button>
     </div>
     <input type="text" id="folderSearch" placeholder="Filter by filename…">
     <button class="smallBtn" id="btnRescanFolder">↻ Rescan</button>
@@ -451,6 +464,7 @@
     <canvas id="scene3DCanvas"></canvas>
     <div id="scene3DLoading">Loading 3D engine…</div>
     <div id="scene3DHint">
+      <b>Scale:</b> the ground grid is in 1m squares — screens are sized to real physical dimensions<br>
       <b>Click</b> a screen to select it and rotate it (right panel)<br>
       <b>Drag</b> a screen to move it · <b>Shift+drag</b> to change its height<br>
       <b>Left-drag</b> empty space to orbit · <b>Right-drag</b> to pan · <b>Scroll</b> to zoom<br>
@@ -508,7 +522,7 @@ function defaultMap(name){
   return {
     id: uid(), mapName: name || 'NEW_MAP',
     canvasW: 2352, canvasH: 1344,
-    gridMode: 'tile', tileW: 168, tileH: 168, colCount: 14, rowCount: 8,
+    gridMode: 'tile', tileW: 168, tileH: 168, colCount: 14, rowCount: 8, tilePhysWcm: 50, tilePhysHcm: 50,
     zonesEnabled: false, zones: [],
     colorA: '#2b4a68', colorB: '#22374d', checkerMode: 'checker',
     labelColor: '#dfe3e8', guideColor: '#ffffff',
@@ -568,6 +582,12 @@ function load(){
         if (m.canvasBorderEnabled === undefined) m.canvasBorderEnabled = false;
         if (m.canvasBorderColor === undefined) m.canvasBorderColor = '#ffffff';
         if (m.canvasBorderWidth === undefined) m.canvasBorderWidth = 8;
+        if (m.tilePhysWcm === undefined){
+          m.tilePhysWcm = m.pitchMM ? (m.tileW||168)*m.pitchMM/10 : 50;
+        }
+        if (m.tilePhysHcm === undefined){
+          m.tilePhysHcm = m.pitchMM ? (m.tileH||168)*m.pitchMM/10 : 50;
+        }
         if (m.cornerTag === undefined) m.cornerTag = '';
         if (m.irregularEnabled === undefined) m.irregularEnabled = false;
         if (m.rowsDef === undefined) m.rowsDef = [];
@@ -670,7 +690,7 @@ function mkIcon(txt,title,fn){
 function esc(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 /* =============== settings binding =============== */
-const numKeys = ['canvasW','canvasH','tileW','tileH','colCount','rowCount','labelScale','guideWidth','badgeScale','badgeOpacity','canvasBorderWidth'];
+const numKeys = ['canvasW','canvasH','tileW','tileH','colCount','rowCount','labelScale','guideWidth','badgeScale','badgeOpacity','canvasBorderWidth','tilePhysWcm','tilePhysHcm'];
 
 const COLOR_PRESETS = {
   navy:      ['#2b4a68', '#22374d'],
@@ -705,7 +725,7 @@ function bindSettings(){
         }
         renderSettings();
       }
-      save(); renderRail(); renderCanvas();
+      save(); renderRail(); renderCanvas(); updatePhysicalSizeHint();
     });
   });
   document.getElementById('tilePreset').addEventListener('change', e=>{
@@ -715,7 +735,14 @@ function bindSettings(){
       m.tileW = +v; m.tileH = +v;
       document.querySelector('[data-k="tileW"]').value = v;
       document.querySelector('[data-k="tileH"]').value = v;
-      save(); renderCanvas();
+      const cabinetCm = +e.target.selectedOptions[0].dataset.cabinetCm;
+      if(cabinetCm){
+        m.tilePhysWcm = cabinetCm;
+        m.tilePhysHcm = cabinetCm;
+        document.querySelector('[data-k="tilePhysWcm"]').value = cabinetCm;
+        document.querySelector('[data-k="tilePhysHcm"]').value = cabinetCm;
+      }
+      save(); renderCanvas(); updatePhysicalSizeHint();
     }
   });
   document.getElementById('colorPreset').addEventListener('change', e=>{
@@ -797,6 +824,20 @@ function syncColorPreset(m){
   sel.value = match ? match[0] : 'custom';
 }
 
+function physicalSizeCm(m){
+  const tw = m.tileW>0 ? m.tileW : 168, th = m.tileH>0 ? m.tileH : 168;
+  const cmPerPxX = (m.tilePhysWcm>0 ? m.tilePhysWcm : 50) / tw;
+  const cmPerPxY = (m.tilePhysHcm>0 ? m.tilePhysHcm : 50) / th;
+  return { w: m.canvasW * cmPerPxX, h: m.canvasH * cmPerPxY, cmPerPxX, cmPerPxY };
+}
+function updatePhysicalSizeHint(){
+  const m = activeMap(); const el = document.getElementById('physicalSizeHint');
+  if(!m || !el) return;
+  const {w,h} = physicalSizeCm(m);
+  el.innerHTML = `Physical size: <b>${r2(w)} cm × ${r2(h)} cm</b> (${r2(w/100)} m × ${r2(h/100)} m)` +
+    (!m.tilePhysWcm ? ` <span class="warn">— using default 50cm tile, set yours above.</span>` : '');
+}
+
 function toggleGridInputs(m){
   document.getElementById('tileInputs').style.display = m.gridMode==='tile' ? '' : 'none';
   document.getElementById('countInputs').style.display = m.gridMode==='tile' ? 'none' : '';
@@ -815,6 +856,7 @@ function renderSettings(){
   toggleGridInputs(m);
   syncTilePreset(m);
   syncColorPreset(m);
+  updatePhysicalSizeHint();
 
   document.getElementById('zoneControls').style.display = m.zonesEnabled ? '' : 'none';
   document.getElementById('rowControls').style.display = m.irregularEnabled ? '' : 'none';
@@ -1435,6 +1477,162 @@ async function saveBlob(filename, blob){
   setTimeout(()=>URL.revokeObjectURL(a.href), 3000);
 }
 
+/* =============== Cinema 4D export =============== */
+function pyStr(s){
+  return "'" + String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'") + "'";
+}
+
+function buildC4DPythonScript(items, sceneName){
+  const itemLines = items.map(it => `    {
+        'name': ${pyStr(it.name)},
+        'w_cm': ${it.wCm.toFixed(3)}, 'h_cm': ${it.hCm.toFixed(3)},
+        'x_cm': ${it.xCm.toFixed(3)}, 'y_cm': ${it.yCm.toFixed(3)}, 'z_cm': ${it.zCm.toFixed(3)},
+        'h_deg': ${it.hDeg.toFixed(3)}, 'p_deg': ${it.pDeg.toFixed(3)}, 'b_deg': ${it.bDeg.toFixed(3)},
+        'texture': ${pyStr(it.texture)},
+    }`).join(',\n');
+
+  return `"""
+PSBL PXLMAPPER -> Cinema 4D import script
+Generated: ${new Date().toISOString()}
+Scene: ${sceneName}
+
+WHAT THIS DOES
+  Creates one flat Plane object per pixelmap screen, sized to true real-world
+  centimeters (Cinema 4D's Python API always works in cm internally, regardless
+  of your document's displayed unit), positioned and rotated to match the
+  layout built in the PXLMAPPER 3D view.
+
+BEFORE RUNNING
+  1. Export the PNG for each pixelmap listed below (PXLMAPPER > Export)
+     into ONE folder.
+  2. In Cinema 4D: Extensions > Script Manager (or Extensions > Python),
+     paste this whole script in, then press "Execute".
+  3. You'll be asked to pick the folder containing those PNGs.
+
+ROTATION NOTE (please read)
+  Cinema 4D's rotation (Heading/Pitch/Bank) uses a different axis convention
+  and handedness than the 3D view this was exported from. Position (X/Y/Z)
+  should land correctly. Rotation is a best-effort conversion, not verified
+  against a live Cinema 4D session — if a rotated screen looks mirrored or
+  off, it's almost always a sign flip on one axis. The AXIS_FLIP constants
+  below are the first place to adjust.
+
+MATERIAL NOTE
+  Textures are applied using Cinema 4D's native Standard material (Luminance
+  channel, so it displays unlit) so this works regardless of render engine.
+  If you use Redshift and want a proper RS material graph, treat this as a
+  placeholder / viewport reference and rebuild the shader in Redshift's node
+  editor.
+"""
+
+import c4d
+import os
+
+# --- adjust here if rotation looks mirrored on a given axis ---
+AXIS_FLIP_H = -1   # Heading  (was Y rotation in the 3D view)
+AXIS_FLIP_P = 1    # Pitch    (was X rotation in the 3D view)
+AXIS_FLIP_B = -1   # Bank     (was Z rotation in the 3D view)
+
+ITEMS = [
+${itemLines}
+]
+
+def main():
+    doc = c4d.documents.GetActiveDocument()
+
+    folder = c4d.storage.LoadDialog(
+        type=c4d.FILESELECTTYPE_ANYTHING,
+        title="Select folder containing your exported pixelmap PNGs",
+        flags=c4d.FILESELECT_DIRECTORY
+    )
+    if not folder:
+        print("Cancelled - no folder selected.")
+        return
+
+    group = c4d.BaseObject(c4d.Onull)
+    group.SetName(${pyStr(sceneName + ' — PXLMAPPER')})
+    doc.InsertObject(group)
+
+    for it in ITEMS:
+        plane = c4d.BaseObject(c4d.Oplane)
+        plane.SetName(it['name'])
+        plane[c4d.PRIM_PLANE_WIDTH] = it['w_cm']
+        plane[c4d.PRIM_PLANE_HEIGHT] = it['h_cm']
+        plane[c4d.PRIM_PLANE_SUBW] = 1
+        plane[c4d.PRIM_PLANE_SUBH] = 1
+        plane.InsertUnder(group)
+
+        plane.SetAbsPos(c4d.Vector(it['x_cm'], it['y_cm'], it['z_cm']))
+        h = c4d.utils.DegToRad(it['h_deg']) * AXIS_FLIP_H
+        p = c4d.utils.DegToRad(it['p_deg']) * AXIS_FLIP_P
+        b = c4d.utils.DegToRad(it['b_deg']) * AXIS_FLIP_B
+        plane.SetRotation(c4d.Vector(h, p, b))
+
+        texpath = os.path.join(folder, it['texture'])
+        if os.path.exists(texpath):
+            mat = c4d.BaseMaterial(c4d.Mmaterial)
+            mat.SetName(it['name'] + "_mat")
+            mat[c4d.MATERIAL_USE_COLOR] = False
+            mat[c4d.MATERIAL_USE_LUMINANCE] = True
+            shader = c4d.BaseShader(c4d.Xbitmap)
+            shader[c4d.BITMAPSHADER_FILENAME] = texpath
+            mat.InsertShader(shader)
+            mat[c4d.MATERIAL_LUMINANCE_SHADER] = shader
+            doc.InsertMaterial(mat)
+
+            tag = plane.MakeTag(c4d.Ttexture)
+            tag[c4d.TEXTURETAG_MATERIAL] = mat
+            tag[c4d.TEXTURETAG_PROJECTION] = c4d.TEXTURETAG_PROJECTION_FLAT
+        else:
+            print("Texture not found, skipped material for: " + it['name'] + " (" + texpath + ")")
+
+    c4d.EventAdd()
+    print("PXLMAPPER import complete: " + str(len(ITEMS)) + " plane(s) created.")
+
+if __name__=='__main__':
+    main()
+`;
+}
+
+document.getElementById('btnExportC4DSingle').onclick = async ()=>{
+  const m = activeMap(); if(!m) return;
+  const {w,h} = physicalSizeCm(m);
+  const nm = (m.mapName||'pixelmap').replace(/[^\w\-]+/g,'_');
+  const items = [{
+    name: m.mapName || 'PIXELMAP',
+    wCm:w, hCm:h,
+    xCm:0, yCm:h/2, zCm:0,
+    hDeg:0, pDeg:0, bDeg:0,
+    texture: `${nm}_${m.canvasW}x${m.canvasH}.png`
+  }];
+  const script = buildC4DPythonScript(items, m.mapName || 'PIXELMAP');
+  await saveBlob(`${nm}_c4d_import.py`, new Blob([script], {type:'text/x-python'}));
+};
+
+document.getElementById('btnExportC4DScene').onclick = async ()=>{
+  if(!planeMeshes3D.length) return;
+  const p1 = boardMode==='project' ? overviewProject : null;
+  const items = planeMeshes3D.map(rec=>{
+    const wCm = rec.w*100, hCm = rec.h*100;
+    const xCm = rec.group.position.x*100, yCm = rec.group.position.y*100, zCm = rec.group.position.z*100;
+    const hDeg = THREE.MathUtils.radToDeg(rec.group.rotation.y);
+    const pDeg = THREE.MathUtils.radToDeg(rec.group.rotation.x);
+    const bDeg = THREE.MathUtils.radToDeg(rec.group.rotation.z);
+    let texture;
+    const srcMap = p1 && rec.mapId ? p1.maps.find(x=>x.id===rec.mapId) : null;
+    if(srcMap){
+      texture = `${(srcMap.mapName||'pixelmap').replace(/[^\w\-]+/g,'_')}_${srcMap.canvasW}x${srcMap.canvasH}.png`;
+    } else {
+      texture = rec.name; // folder-scan mode: name IS the actual scanned filename
+    }
+    return {name:rec.name, wCm, hCm, xCm, yCm, zCm, hDeg, pDeg, bDeg, texture};
+  });
+  const sceneName = p1 ? p1.name : 'PXLMAPPER Scene';
+  const script = buildC4DPythonScript(items, sceneName);
+  const nm = sceneName.replace(/[^\w\-]+/g,'_');
+  await saveBlob(`${nm}_c4d_scene.py`, new Blob([script], {type:'text/x-python'}));
+};
+
 /* =============== exports =============== */
 function exportMapPNG(m, cb){
   const prevActive = state.activeMap;
@@ -1546,6 +1744,12 @@ document.getElementById('importFile').addEventListener('change', e=>{
         if (mm.canvasBorderEnabled === undefined) mm.canvasBorderEnabled = false;
         if (mm.canvasBorderColor === undefined) mm.canvasBorderColor = '#ffffff';
         if (mm.canvasBorderWidth === undefined) mm.canvasBorderWidth = 8;
+        if (mm.tilePhysWcm === undefined){
+          mm.tilePhysWcm = mm.pitchMM ? (mm.tileW||168)*mm.pitchMM/10 : 50;
+        }
+        if (mm.tilePhysHcm === undefined){
+          mm.tilePhysHcm = mm.pitchMM ? (mm.tileH||168)*mm.pitchMM/10 : 50;
+        }
         if (mm.cornerTag === undefined) mm.cornerTag = '';
         if (mm.irregularEnabled === undefined) mm.irregularEnabled = false;
         if (mm.rowsDef === undefined) mm.rowsDef = [];
@@ -1652,7 +1856,8 @@ async function renderProjectThumbs(project){
     state.activeMap = m.id;
     renderCanvas();
     const url = thumbDataURL(canvas, 480);
-    folderThumbs.push({name:m.mapName, mapId:m.id, url, w:m.canvasW, h:m.canvasH});
+    const phys = physicalSizeCm(m);
+    folderThumbs.push({name:m.mapName, mapId:m.id, url, w:m.canvasW, h:m.canvasH, realWcm:phys.w, realHcm:phys.h});
   });
   state.activeMap = prevActive;
   renderCanvas();
@@ -1734,7 +1939,8 @@ async function scanFolder(h){
       img.onerror = ()=>res({w:0,h:0});
       img.src = url;
     });
-    folderThumbs.push({name:f.name, url, w:dims.w, h:dims.h});
+    const defaultCmPerPx = 50/168; // fallback: assume a 500mm/168px tile when no map data exists
+    folderThumbs.push({name:f.name, url, w:dims.w, h:dims.h, realWcm:dims.w*defaultCmPerPx, realHcm:dims.h*defaultCmPerPx});
   }
 
   document.getElementById('folderOverlayCount').textContent =
@@ -1967,7 +2173,7 @@ function init3DScene(){
   scene3D.background = new THREE.Color(0x14161b);
   camera3D = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
   renderer3D = new THREE.WebGLRenderer({canvas:cvs, antialias:true});
-  scene3D.add(new THREE.GridHelper(80, 40, 0x3a4252, 0x22262e));
+  scene3D.add(new THREE.GridHelper(200, 200, 0x3a4252, 0x22262e));
   bind3DPointerEvents(cvs);
   requestAnimationFrame(animate3D);
 }
@@ -2022,23 +2228,27 @@ function makeTextSprite(text){
   c2.fillText(text, cvs.width/2, cvs.height/2+2);
   const tex = new THREE.CanvasTexture(cvs);
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({map:tex, depthTest:false}));
-  const s = 0.013;
-  sprite.scale.set(cvs.width*s, cvs.height*s, 1);
+  const targetHeightM = 0.4; // fixed real-world label height so it stays legible regardless of screen size
+  const aspect = cvs.width/cvs.height;
+  sprite.scale.set(targetHeightM*aspect, targetHeightM, 1);
   sprite.renderOrder = 999;
   return sprite;
 }
 
+/* 1 three.js scene unit = 1 meter. Plane sizes come from each map's real
+   physical size (tile physical cm size ÷ tile pixel count), so screens with
+   different tile physical sizes stay correctly proportioned to each other —
+   and it's what makes the Cinema 4D export (which needs true cm) correct. */
 function populate3DScene(){
   if(!scene3D) return;
   clear3DMeshes();
   if(!folderThumbs.length) return;
 
-  const maxDim = Math.max(...folderThumbs.map(t=>Math.max(t.w,t.h)), 1);
-  const worldScale = 10/maxDim;
   const hasSaved = folderThumbs.some(t=>layout3D[t.name]);
 
   folderThumbs.forEach((t,i)=>{
-    const w = Math.max(0.2, t.w*worldScale), h = Math.max(0.2, t.h*worldScale);
+    const realWm = (t.realWcm||50)/100, realHm = (t.realHcm||50)/100;
+    const w = Math.max(0.05, realWm), h = Math.max(0.05, realHm);
     const geo = new THREE.PlaneGeometry(w,h);
     const tex = new THREE.TextureLoader().load(t.url);
     const mat = new THREE.MeshBasicMaterial({map:tex, side:THREE.DoubleSide});
@@ -2051,7 +2261,7 @@ function populate3DScene(){
     );
     group.add(edges);
     const label = makeTextSprite(t.name);
-    label.position.set(0, h/2+0.35, 0);
+    label.position.set(0, h/2+0.28, 0);
     group.add(label);
 
     const pos = layout3D[t.name];
@@ -2059,7 +2269,7 @@ function populate3DScene(){
       group.position.set(pos.x, pos.y!=null?pos.y:h/2, pos.z);
       group.rotation.set(pos.rx||0, pos.ry||0, pos.rz||0);
     } else {
-      const gap = maxDim*worldScale*0.15 + 0.5;
+      const gap = 0.6;
       group.position.set((i-(folderThumbs.length-1)/2)*(w+gap), h/2, 0);
     }
     scene3D.add(group);
