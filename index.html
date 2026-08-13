@@ -1486,6 +1486,7 @@ function buildC4DPythonScript(items, sceneName){
   const itemLines = items.map(it => `    {
         'name': ${pyStr(it.name)},
         'w_cm': ${it.wCm.toFixed(3)}, 'h_cm': ${it.hCm.toFixed(3)},
+        'sub_w': ${Math.max(1, Math.round(it.subW||1))}, 'sub_h': ${Math.max(1, Math.round(it.subH||1))},
         'x_cm': ${it.xCm.toFixed(3)}, 'y_cm': ${it.yCm.toFixed(3)}, 'z_cm': ${it.zCm.toFixed(3)},
         'h_deg': ${it.hDeg.toFixed(3)}, 'p_deg': ${it.pDeg.toFixed(3)}, 'b_deg': ${it.bDeg.toFixed(3)},
         'texture': ${pyStr(it.texture)},
@@ -1510,16 +1511,18 @@ BEFORE RUNNING
   3. You'll be asked to pick the folder containing those PNGs.
 
 ROTATION NOTE (please read)
-  Cinema 4D's rotation (Heading/Pitch/Bank) uses a different axis convention
-  and handedness than the 3D view this was exported from. Position (X/Y/Z)
-  should land correctly. Rotation is a best-effort conversion, not verified
-  against a live Cinema 4D session — if a rotated screen looks mirrored or
-  off, it's almost always a sign flip on one axis. The AXIS_FLIP constants
-  below are the first place to adjust.
+  Cinema 4D's Plane primitive defaults to lying flat (horizontal), while the
+  PXLMAPPER 3D view treats an unrotated screen as standing up (vertical).
+  This script sets the plane's orientation to match the vertical default
+  before applying rotation, so a screen you left unrotated in PXLMAPPER
+  comes in standing up here too. If a rotated screen still looks off, the
+  AXIS_FLIP constants below are the first place to adjust — this mapping
+  hasn't been verified against every Cinema 4D version.
 
 MATERIAL NOTE
-  Textures are applied using Cinema 4D's native Standard material (Luminance
-  channel, so it displays unlit) so this works regardless of render engine.
+  Textures are applied on the Color channel of Cinema 4D's native Standard
+  material, so it responds to scene lighting like any normal object — add
+  a light (or use your renderer's default) if planes look black in a render.
   If you use Redshift and want a proper RS material graph, treat this as a
   placeholder / viewport reference and rebuild the shader in Redshift's node
   editor.
@@ -1528,7 +1531,7 @@ MATERIAL NOTE
 import c4d
 import os
 
-# --- adjust here if rotation looks mirrored on a given axis ---
+# --- adjust here if rotation still looks wrong on a given axis ---
 AXIS_FLIP_H = -1   # Heading  (was Y rotation in the 3D view)
 AXIS_FLIP_P = 1    # Pitch    (was X rotation in the 3D view)
 AXIS_FLIP_B = -1   # Bank     (was Z rotation in the 3D view)
@@ -1558,8 +1561,11 @@ def main():
         plane.SetName(it['name'])
         plane[c4d.PRIM_PLANE_WIDTH] = it['w_cm']
         plane[c4d.PRIM_PLANE_HEIGHT] = it['h_cm']
-        plane[c4d.PRIM_PLANE_SUBW] = 1
-        plane[c4d.PRIM_PLANE_SUBH] = 1
+        plane[c4d.PRIM_PLANE_SUBW] = it['sub_w']
+        plane[c4d.PRIM_PLANE_SUBH] = it['sub_h']
+        # Cinema 4D's Plane defaults to horizontal (XZ); PXLMAPPER's 3D view
+        # treats an unrotated screen as vertical. Match that here.
+        plane[c4d.PRIM_PLANE_ORIENTATION] = c4d.PRIM_PLANE_ORIENTATION_XY
         plane.InsertUnder(group)
 
         plane[c4d.ID_BASEOBJECT_POSITION] = c4d.Vector(it['x_cm'], it['y_cm'], it['z_cm'])
@@ -1572,17 +1578,17 @@ def main():
         if os.path.exists(texpath):
             mat = c4d.BaseMaterial(c4d.Mmaterial)
             mat.SetName(it['name'] + "_mat")
-            mat[c4d.MATERIAL_USE_COLOR] = False
-            mat[c4d.MATERIAL_USE_LUMINANCE] = True
+            mat[c4d.MATERIAL_USE_COLOR] = True
+            mat[c4d.MATERIAL_USE_LUMINANCE] = False
             shader = c4d.BaseShader(c4d.Xbitmap)
             shader[c4d.BITMAPSHADER_FILENAME] = texpath
             mat.InsertShader(shader)
-            mat[c4d.MATERIAL_LUMINANCE_SHADER] = shader
+            mat[c4d.MATERIAL_COLOR_SHADER] = shader
             doc.InsertMaterial(mat)
 
             tag = plane.MakeTag(c4d.Ttexture)
             tag[c4d.TEXTURETAG_MATERIAL] = mat
-            tag[c4d.TEXTURETAG_PROJECTION] = c4d.TEXTURETAG_PROJECTION_FLAT
+            tag[c4d.TEXTURETAG_PROJECTION] = c4d.TEXTURETAG_PROJECTION_UVW
         else:
             print("Texture not found, skipped material for: " + it['name'] + " (" + texpath + ")")
 
@@ -1597,10 +1603,12 @@ if __name__=='__main__':
 document.getElementById('btnExportC4DSingle').onclick = async ()=>{
   const m = activeMap(); if(!m) return;
   const {w,h} = physicalSizeCm(m);
+  const grid = layoutTiles(m);
   const nm = (m.mapName||'pixelmap').replace(/[^\w\-]+/g,'_');
   const items = [{
     name: m.mapName || 'PIXELMAP',
     wCm:w, hCm:h,
+    subW: grid.cols, subH: grid.rows,
     xCm:0, yCm:h/2, zCm:0,
     hDeg:0, pDeg:0, bDeg:0,
     texture: `${nm}_${m.canvasW}x${m.canvasH}.png`
@@ -1618,14 +1626,16 @@ document.getElementById('btnExportC4DScene').onclick = async ()=>{
     const hDeg = THREE.MathUtils.radToDeg(rec.group.rotation.y);
     const pDeg = THREE.MathUtils.radToDeg(rec.group.rotation.x);
     const bDeg = THREE.MathUtils.radToDeg(rec.group.rotation.z);
-    let texture;
+    let texture, subW=1, subH=1;
     const srcMap = p1 && rec.mapId ? p1.maps.find(x=>x.id===rec.mapId) : null;
     if(srcMap){
       texture = `${(srcMap.mapName||'pixelmap').replace(/[^\w\-]+/g,'_')}_${srcMap.canvasW}x${srcMap.canvasH}.png`;
+      const grid = layoutTiles(srcMap);
+      subW = grid.cols; subH = grid.rows;
     } else {
-      texture = rec.name; // folder-scan mode: name IS the actual scanned filename
+      texture = rec.name; // folder-scan mode: name IS the actual scanned filename, no grid data available
     }
-    return {name:rec.name, wCm, hCm, xCm, yCm, zCm, hDeg, pDeg, bDeg, texture};
+    return {name:rec.name, wCm, hCm, subW, subH, xCm, yCm, zCm, hDeg, pDeg, bDeg, texture};
   });
   const sceneName = p1 ? p1.name : 'PXLMAPPER Scene';
   const script = buildC4DPythonScript(items, sceneName);
