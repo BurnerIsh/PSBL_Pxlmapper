@@ -1562,11 +1562,11 @@ def main():
         plane[c4d.PRIM_PLANE_SUBH] = 1
         plane.InsertUnder(group)
 
-        plane.SetAbsPos(c4d.Vector(it['x_cm'], it['y_cm'], it['z_cm']))
+        plane[c4d.ID_BASEOBJECT_POSITION] = c4d.Vector(it['x_cm'], it['y_cm'], it['z_cm'])
         h = c4d.utils.DegToRad(it['h_deg']) * AXIS_FLIP_H
         p = c4d.utils.DegToRad(it['p_deg']) * AXIS_FLIP_P
         b = c4d.utils.DegToRad(it['b_deg']) * AXIS_FLIP_B
-        plane.SetRotation(c4d.Vector(h, p, b))
+        plane[c4d.ID_BASEOBJECT_REL_ROTATION] = c4d.Vector(h, p, b)
 
         texpath = os.path.join(folder, it['texture'])
         if os.path.exists(texpath):
