@@ -167,9 +167,25 @@
   #scene3DHint{
     position:absolute; left:16px; bottom:14px; background:rgba(20,22,27,.85);
     border:1px solid var(--line); border-radius:8px; padding:9px 13px;
-    font-size:11px; color:var(--dim); line-height:1.7; max-width:300px; pointer-events:none;
+    font-size:11px; color:var(--dim); line-height:1.7; max-width:320px; pointer-events:none;
   }
   #scene3DHint b{color:var(--text);}
+
+  #rotatePanel{
+    position:absolute; top:16px; right:16px; width:220px;
+    background:rgba(20,22,27,.92); border:1px solid var(--line); border-radius:9px;
+    padding:12px 14px; display:none;
+  }
+  #rotatePanel .rotHead{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid var(--line);
+  }
+  #rotatePanel .rotHead b{font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  #rotatePanel label{
+    display:flex; justify-content:space-between; font-size:11px; color:var(--dim); margin:8px 0 3px;
+  }
+  #rotatePanel input[type=range]{width:100%; accent-color:var(--accent);}
+  #rotatePanel .smallBtn{margin-top:10px; padding:6px 10px; font-size:11.5px;}
 
   /* lightbox */
   #lightbox{
@@ -435,9 +451,23 @@
     <canvas id="scene3DCanvas"></canvas>
     <div id="scene3DLoading">Loading 3D engine…</div>
     <div id="scene3DHint">
-      <b>Drag</b> a screen to move it · <b>Shift+drag</b> a screen to change its height<br>
+      <b>Click</b> a screen to select it and rotate it (right panel)<br>
+      <b>Drag</b> a screen to move it · <b>Shift+drag</b> to change its height<br>
       <b>Left-drag</b> empty space to orbit · <b>Right-drag</b> to pan · <b>Scroll</b> to zoom<br>
       <b>Double-click</b> a screen to open it in the editor
+    </div>
+    <div id="rotatePanel">
+      <div class="rotHead">
+        <b id="rotPanelName">—</b>
+        <button class="iconBtn" id="btnDeselect3D" title="Deselect">✕</button>
+      </div>
+      <label>Rotate X <span id="rotXVal">0°</span></label>
+      <input type="range" id="rotX" min="-180" max="180" value="0" step="1">
+      <label>Rotate Y <span id="rotYVal">0°</span></label>
+      <input type="range" id="rotY" min="-180" max="180" value="0" step="1">
+      <label>Rotate Z <span id="rotZVal">0°</span></label>
+      <input type="range" id="rotZ" min="-180" max="180" value="0" step="1">
+      <button class="smallBtn" id="btnResetRot3D">Reset rotation</button>
     </div>
   </div>
   <div id="folderEmpty">
@@ -1916,6 +1946,7 @@ let dragMode3D = null;    // 'orbit' | 'pan'
 let dragStart3D = {x:0,y:0};
 let dragOrigCam3D = null;
 let activeDrag3D = null;  // {rec, plane, offset, mode, startY, startPos}
+let selectedRec3D = null;
 
 function loadThreeJS(){
   if(threeLoaded) return Promise.resolve();
@@ -2026,6 +2057,7 @@ function populate3DScene(){
     const pos = layout3D[t.name];
     if(pos){
       group.position.set(pos.x, pos.y!=null?pos.y:h/2, pos.z);
+      group.rotation.set(pos.rx||0, pos.ry||0, pos.rz||0);
     } else {
       const gap = maxDim*worldScale*0.15 + 0.5;
       group.position.set((i-(folderThumbs.length-1)/2)*(w+gap), h/2, 0);
@@ -2034,7 +2066,16 @@ function populate3DScene(){
     planeMeshes3D.push({group, mesh, name:t.name, mapId:t.mapId, w, h});
   });
 
+  hideRotatePanel();
   if(!hasSaved) fitCameraToScene3D();
+}
+
+function persistRecTransform(rec){
+  layout3D[rec.name] = {
+    x:rec.group.position.x, y:rec.group.position.y, z:rec.group.position.z,
+    rx:rec.group.rotation.x, ry:rec.group.rotation.y, rz:rec.group.rotation.z
+  };
+  persist3D();
 }
 
 function fitCameraToScene3D(){
@@ -2057,11 +2098,13 @@ function arrange3DRow(){
   let cursor = -(x-0.6)/2;
   planeMeshes3D.forEach(p=>{
     p.group.position.set(cursor + p.w/2, p.h/2, 0);
+    p.group.rotation.set(0,0,0);
     cursor += p.w + 0.6;
-    layout3D[p.name] = {x:p.group.position.x, y:p.group.position.y, z:p.group.position.z};
+    layout3D[p.name] = {x:p.group.position.x, y:p.group.position.y, z:p.group.position.z, rx:0, ry:0, rz:0};
   });
   persist3D();
   fitCameraToScene3D();
+  syncRotatePanelIfSelected();
 }
 function arrange3DGrid(){
   if(!planeMeshes3D.length) return;
@@ -2072,10 +2115,12 @@ function arrange3DGrid(){
   planeMeshes3D.forEach((p,i)=>{
     const col=i%cols, row=Math.floor(i/cols);
     p.group.position.set(col*(maxW+gap) - (cols-1)*(maxW+gap)/2, p.h/2, row*(maxH+gap));
-    layout3D[p.name] = {x:p.group.position.x, y:p.group.position.y, z:p.group.position.z};
+    p.group.rotation.set(0,0,0);
+    layout3D[p.name] = {x:p.group.position.x, y:p.group.position.y, z:p.group.position.z, rx:0, ry:0, rz:0};
   });
   persist3D();
   fitCameraToScene3D();
+  syncRotatePanelIfSelected();
 }
 
 function bind3DPointerEvents(cvs){
@@ -2101,10 +2146,12 @@ function bind3DPointerEvents(cvs){
         const offset = hitPoint.clone().sub(rec.group.position);
         activeDrag3D = {rec, plane, offset, mode, startY:e.clientY, startPos:rec.group.position.clone()};
         cvs.style.cursor = 'grabbing';
+        showRotatePanel(rec);
       } else {
         dragMode3D = 'orbit';
         dragStart3D = {x:e.clientX, y:e.clientY};
         dragOrigCam3D = {azimuth:cam3D.azimuth, polar:cam3D.polar, target:{...cam3D.target}};
+        hideRotatePanel();
       }
     } else if(e.button===2){
       dragMode3D = 'pan';
@@ -2149,10 +2196,7 @@ function bind3DPointerEvents(cvs){
   });
   const end = ()=>{
     if(activeDrag3D){
-      layout3D[activeDrag3D.rec.name] = {
-        x:activeDrag3D.rec.group.position.x, y:activeDrag3D.rec.group.position.y, z:activeDrag3D.rec.group.position.z
-      };
-      persist3D();
+      persistRecTransform(activeDrag3D.rec);
       activeDrag3D = null;
       cvs.style.cursor = 'grab';
     }
@@ -2182,6 +2226,50 @@ function bind3DPointerEvents(cvs){
 document.getElementById('btnArrangeRow3D').onclick = arrange3DRow;
 document.getElementById('btnArrangeGrid3D').onclick = arrange3DGrid;
 document.getElementById('btnReset3D').onclick = fitCameraToScene3D;
+
+/* ---- rotation panel ---- */
+function showRotatePanel(rec){
+  selectedRec3D = rec;
+  document.getElementById('rotatePanel').style.display = 'block';
+  document.getElementById('rotPanelName').textContent = rec.name;
+  syncRotatePanelIfSelected();
+}
+function hideRotatePanel(){
+  selectedRec3D = null;
+  document.getElementById('rotatePanel').style.display = 'none';
+}
+function syncRotatePanelIfSelected(){
+  if(!selectedRec3D) return;
+  const rx = Math.round(THREE.MathUtils.radToDeg(selectedRec3D.group.rotation.x));
+  const ry = Math.round(THREE.MathUtils.radToDeg(selectedRec3D.group.rotation.y));
+  const rz = Math.round(THREE.MathUtils.radToDeg(selectedRec3D.group.rotation.z));
+  document.getElementById('rotX').value = rx; document.getElementById('rotXVal').textContent = rx+'°';
+  document.getElementById('rotY').value = ry; document.getElementById('rotYVal').textContent = ry+'°';
+  document.getElementById('rotZ').value = rz; document.getElementById('rotZVal').textContent = rz+'°';
+}
+function applyRotationFromSliders(){
+  if(!selectedRec3D) return;
+  const rx = +document.getElementById('rotX').value;
+  const ry = +document.getElementById('rotY').value;
+  const rz = +document.getElementById('rotZ').value;
+  selectedRec3D.group.rotation.set(
+    THREE.MathUtils.degToRad(rx), THREE.MathUtils.degToRad(ry), THREE.MathUtils.degToRad(rz)
+  );
+  document.getElementById('rotXVal').textContent = rx+'°';
+  document.getElementById('rotYVal').textContent = ry+'°';
+  document.getElementById('rotZVal').textContent = rz+'°';
+  persistRecTransform(selectedRec3D);
+}
+['rotX','rotY','rotZ'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', applyRotationFromSliders);
+});
+document.getElementById('btnResetRot3D').onclick = ()=>{
+  if(!selectedRec3D) return;
+  selectedRec3D.group.rotation.set(0,0,0);
+  syncRotatePanelIfSelected();
+  persistRecTransform(selectedRec3D);
+};
+document.getElementById('btnDeselect3D').onclick = hideRotatePanel;
 
 /* =============== boot =============== */
 function renderAll(){ renderRail(); renderSettings(); renderCanvas(); }
