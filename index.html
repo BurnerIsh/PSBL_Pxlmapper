@@ -323,6 +323,11 @@
       <div><label>Label color</label><input type="color" data-k="labelColor"></div>
       <div><label>Guide color</label><input type="color" data-k="guideColor"></div>
     </div>
+    <div class="chk"><input type="checkbox" data-k="canvasBorderEnabled"><span>Outer canvas border</span></div>
+    <div class="row">
+      <div><label>Border color</label><input type="color" data-k="canvasBorderColor"></div>
+      <div><label>Border width (px)</label><input type="number" data-k="canvasBorderWidth" min="1" step="1"></div>
+    </div>
   </fieldset>
 
   <fieldset>
@@ -331,7 +336,7 @@
     <select data-k="numberMode">
       <option value="letterRow">Letter row + number (A01, A02… B01…)</option>
       <option value="seq">Sequential (001, 002…)</option>
-      <option value="rowcol">Row-Col (R1C1…)</option>
+      <option value="rowcol">Row-Col, stacked (R1 ⏎ C1)</option>
       <option value="colRow2">Col over Row, stacked (01 ⏎ 04)</option>
       <option value="none">No numbers</option>
     </select>
@@ -482,6 +487,7 @@ function defaultMap(name){
     showBadge: true, showDims: true, showGridInfo: true,
     badgeScale: 100, badgeOpacity: 92, zoneBadge: true, badgeBorder: '#ffffff',
     bgColor: '#000000', cornerTag: '',
+    canvasBorderEnabled: false, canvasBorderColor: '#ffffff', canvasBorderWidth: 8,
     irregularEnabled: false, rowsDef: [], skipped: {},
     gFullDiag: true, gCross: true, gCircleH: true, gCircleHalf: true,
     gZoneCircles: false, gDashed: true, guideWidth: 3
@@ -529,6 +535,9 @@ function load(){
         if (m.zoneBadge === undefined) m.zoneBadge = true;
         if (m.badgeBorder === undefined) m.badgeBorder = '#ffffff';
         if (m.bgColor === undefined) m.bgColor = '#000000';
+        if (m.canvasBorderEnabled === undefined) m.canvasBorderEnabled = false;
+        if (m.canvasBorderColor === undefined) m.canvasBorderColor = '#ffffff';
+        if (m.canvasBorderWidth === undefined) m.canvasBorderWidth = 8;
         if (m.cornerTag === undefined) m.cornerTag = '';
         if (m.irregularEnabled === undefined) m.irregularEnabled = false;
         if (m.rowsDef === undefined) m.rowsDef = [];
@@ -631,7 +640,7 @@ function mkIcon(txt,title,fn){
 function esc(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 /* =============== settings binding =============== */
-const numKeys = ['canvasW','canvasH','tileW','tileH','colCount','rowCount','labelScale','guideWidth','badgeScale','badgeOpacity'];
+const numKeys = ['canvasW','canvasH','tileW','tileH','colCount','rowCount','labelScale','guideWidth','badgeScale','badgeOpacity','canvasBorderWidth'];
 
 const COLOR_PRESETS = {
   navy:      ['#2b4a68', '#22374d'],
@@ -1097,7 +1106,8 @@ function renderCanvas(){
         ctx.fillText(String(colN).padStart(2,'0'), cx, cy - fs*0.55);
         ctx.fillText(String(t.r+1).padStart(2,'0'), cx, cy + fs*0.55);
       } else {
-        ctx.fillText(`R${t.r+1}C${colN}`, cx, cy);
+        ctx.fillText(`R${t.r+1}`, cx, cy - fs*0.55);
+        ctx.fillText(`C${colN}`, cx, cy + fs*0.55);
       }
       seqN++;
     });
@@ -1245,6 +1255,16 @@ function renderCanvas(){
     ctx.fillStyle='rgba(255,255,255,0.75)';
     ctx.font=`${subFs}px "Segoe UI", Arial, sans-serif`;
     lines.forEach((l,i)=> ctx.fillText(l, W/2, by+padY+nameFs*1.25 + i*lineGap));
+    ctx.restore();
+  }
+
+  /* outer canvas border */
+  if(m.canvasBorderEnabled){
+    ctx.save();
+    const bw = Math.max(1, m.canvasBorderWidth || 8);
+    ctx.strokeStyle = m.canvasBorderColor || '#ffffff';
+    ctx.lineWidth = bw;
+    ctx.strokeRect(bw/2, bw/2, W-bw, H-bw);
     ctx.restore();
   }
 
@@ -1493,6 +1513,9 @@ document.getElementById('importFile').addEventListener('change', e=>{
         mm.id=uid();
         if (mm.zonesEnabled === undefined) mm.zonesEnabled = (mm.zones && mm.zones.length>0);
         if (mm.bgColor === undefined) mm.bgColor = '#000000';
+        if (mm.canvasBorderEnabled === undefined) mm.canvasBorderEnabled = false;
+        if (mm.canvasBorderColor === undefined) mm.canvasBorderColor = '#ffffff';
+        if (mm.canvasBorderWidth === undefined) mm.canvasBorderWidth = 8;
         if (mm.cornerTag === undefined) mm.cornerTag = '';
         if (mm.irregularEnabled === undefined) mm.irregularEnabled = false;
         if (mm.rowsDef === undefined) mm.rowsDef = [];
