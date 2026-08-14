@@ -1511,14 +1511,23 @@ BEFORE RUNNING
   3. You'll be asked to pick the folder containing those PNGs.
 
 ROTATION NOTE (please read)
-  Cinema 4D's Plane primitive defaults to lying flat (horizontal), while the
-  PXLMAPPER 3D view treats an unrotated screen as standing up (vertical).
-  This script compensates with a fixed 90-degree Pitch offset (see
-  BASE_PITCH_OFFSET_DEG below) so a screen you left unrotated in PXLMAPPER
-  comes in standing up here too. This hasn't been verified against a live
-  Cinema 4D session — if screens come in upside down, try -90 there; if a
-  rotated screen still looks off after that, the AXIS_FLIP constants are
-  the next place to adjust.
+  Cinema 4D's Plane primitive has an "Orientation" setting (Z- for a plane
+  standing vertical, Y+ for a plane lying flat) so, ideally, a screen that's
+  meant to be vertical or flat needs no extra rotation math at all — just
+  the right orientation.
+
+  The exact internal name for that setting can differ between Cinema 4D
+  versions, and it hasn't been possible to verify against a live session,
+  so this script TRIES several likely names automatically at runtime and
+  prints which one it used (check the Console after running). If none of
+  them exist in your version, it automatically falls back to the older
+  rotation-offset method so the script still runs either way.
+
+  If it falls back and you want it done right: in Cinema 4D, right-click
+  the "Orientation" field on any Plane object's Attribute Manager and
+  choose "Copy Parameter ID" (and do the same for one of the Z-/Y+ menu
+  entries) — that gives the exact name for your version. Send that over
+  and this can be hardcoded correctly next time.
 
 MATERIAL NOTE
   Textures are applied on the Color channel of Cinema 4D's native Standard
@@ -1532,17 +1541,40 @@ MATERIAL NOTE
 import c4d
 import os
 
-# --- adjust here if rotation still looks wrong on a given axis ---
+# --- adjust here if a rotated (non-flat, non-vertical) screen looks wrong ---
 AXIS_FLIP_H = -1   # Heading  (was Y rotation in the 3D view)
 AXIS_FLIP_P = 1    # Pitch    (was X rotation in the 3D view)
 AXIS_FLIP_B = -1   # Bank     (was Z rotation in the 3D view)
 
-# Cinema 4D's Plane primitive defaults to lying flat (horizontal), while
-# PXLMAPPER's 3D view treats an unrotated screen as standing up (vertical).
-# This constant tips the plane 90 degrees on Pitch to compensate, applied
-# BEFORE the item's own rotation. If screens come in upside down or the
-# compensation looks backwards, try -90 instead of 90.
+# Fallback only, used if no orientation parameter could be found below.
 BASE_PITCH_OFFSET_DEG = 90
+
+# Screens within this many degrees of 0 pitch are treated as "vertical";
+# within this many degrees of +/-90 are treated as "flat". Anything else
+# (an intentionally angled screen) always uses plain rotation.
+SNAP_TOLERANCE_DEG = 5
+
+def _find_const(names):
+    for n in names:
+        if hasattr(c4d, n):
+            return getattr(c4d, n), n
+    return None, None
+
+ORIENT_PARAM, _orient_param_name = _find_const(['PRIM_PLANE_ORIENTATION', 'PRIM_AXIS'])
+ORIENT_Z, _orient_z_name = _find_const([
+    'PRIM_PLANE_ORIENTATION_ZM', 'PRIM_PLANE_ORIENTATION_ZN', 'PRIM_PLANE_ORIENTATION_MZ',
+    'PRIM_AXIS_ZN', 'PRIM_AXIS_ZM'
+])
+ORIENT_Y, _orient_y_name = _find_const([
+    'PRIM_PLANE_ORIENTATION_YP', 'PRIM_AXIS_YP'
+])
+
+if ORIENT_PARAM is not None and ORIENT_Z is not None and ORIENT_Y is not None:
+    print("PXLMAPPER: using orientation parameter '" + _orient_param_name +
+          "' (Z=" + _orient_z_name + ", Y=" + _orient_y_name + ") - vertical/flat screens need no extra rotation.")
+else:
+    print("PXLMAPPER: could not find a Plane orientation parameter in this c4d module - " +
+          "falling back to rotation-only placement. See ROTATION NOTE at the top of this file.")
 
 ITEMS = [
 ${itemLines}
@@ -1574,8 +1606,27 @@ def main():
         plane.InsertUnder(group)
 
         plane[c4d.ID_BASEOBJECT_POSITION] = c4d.Vector(it['x_cm'], it['y_cm'], it['z_cm'])
+
+        p_deg = it['p_deg']
+        use_orientation = ORIENT_PARAM is not None and ORIENT_Z is not None and ORIENT_Y is not None
+        if use_orientation and abs(p_deg) <= SNAP_TOLERANCE_DEG:
+            # meant to stand vertical - orientation does the work, no pitch rotation needed
+            plane[ORIENT_PARAM] = ORIENT_Z
+            p_residual = 0.0
+        elif use_orientation and abs(abs(p_deg) - 90) <= SNAP_TOLERANCE_DEG:
+            # meant to lie flat - orientation does the work, no pitch rotation needed
+            plane[ORIENT_PARAM] = ORIENT_Y
+            p_residual = 0.0
+        elif use_orientation:
+            # in between - default to the vertical orientation and rotate the remainder
+            plane[ORIENT_PARAM] = ORIENT_Z
+            p_residual = p_deg
+        else:
+            # no orientation parameter found - old rotation-only fallback
+            p_residual = p_deg + BASE_PITCH_OFFSET_DEG
+
         h = c4d.utils.DegToRad(it['h_deg']) * AXIS_FLIP_H
-        p = c4d.utils.DegToRad(it['p_deg'] * AXIS_FLIP_P + BASE_PITCH_OFFSET_DEG)
+        p = c4d.utils.DegToRad(p_residual * AXIS_FLIP_P)
         b = c4d.utils.DegToRad(it['b_deg']) * AXIS_FLIP_B
         plane[c4d.ID_BASEOBJECT_REL_ROTATION] = c4d.Vector(h, p, b)
 
