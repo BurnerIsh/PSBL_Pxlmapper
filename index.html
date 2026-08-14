@@ -1513,11 +1513,12 @@ BEFORE RUNNING
 ROTATION NOTE (please read)
   Cinema 4D's Plane primitive defaults to lying flat (horizontal), while the
   PXLMAPPER 3D view treats an unrotated screen as standing up (vertical).
-  This script sets the plane's orientation to match the vertical default
-  before applying rotation, so a screen you left unrotated in PXLMAPPER
-  comes in standing up here too. If a rotated screen still looks off, the
-  AXIS_FLIP constants below are the first place to adjust — this mapping
-  hasn't been verified against every Cinema 4D version.
+  This script compensates with a fixed 90-degree Pitch offset (see
+  BASE_PITCH_OFFSET_DEG below) so a screen you left unrotated in PXLMAPPER
+  comes in standing up here too. This hasn't been verified against a live
+  Cinema 4D session — if screens come in upside down, try -90 there; if a
+  rotated screen still looks off after that, the AXIS_FLIP constants are
+  the next place to adjust.
 
 MATERIAL NOTE
   Textures are applied on the Color channel of Cinema 4D's native Standard
@@ -1535,6 +1536,13 @@ import os
 AXIS_FLIP_H = -1   # Heading  (was Y rotation in the 3D view)
 AXIS_FLIP_P = 1    # Pitch    (was X rotation in the 3D view)
 AXIS_FLIP_B = -1   # Bank     (was Z rotation in the 3D view)
+
+# Cinema 4D's Plane primitive defaults to lying flat (horizontal), while
+# PXLMAPPER's 3D view treats an unrotated screen as standing up (vertical).
+# This constant tips the plane 90 degrees on Pitch to compensate, applied
+# BEFORE the item's own rotation. If screens come in upside down or the
+# compensation looks backwards, try -90 instead of 90.
+BASE_PITCH_OFFSET_DEG = 90
 
 ITEMS = [
 ${itemLines}
@@ -1563,14 +1571,11 @@ def main():
         plane[c4d.PRIM_PLANE_HEIGHT] = it['h_cm']
         plane[c4d.PRIM_PLANE_SUBW] = it['sub_w']
         plane[c4d.PRIM_PLANE_SUBH] = it['sub_h']
-        # Cinema 4D's Plane defaults to horizontal (XZ); PXLMAPPER's 3D view
-        # treats an unrotated screen as vertical. Match that here.
-        plane[c4d.PRIM_PLANE_ORIENTATION] = c4d.PRIM_PLANE_ORIENTATION_XY
         plane.InsertUnder(group)
 
         plane[c4d.ID_BASEOBJECT_POSITION] = c4d.Vector(it['x_cm'], it['y_cm'], it['z_cm'])
         h = c4d.utils.DegToRad(it['h_deg']) * AXIS_FLIP_H
-        p = c4d.utils.DegToRad(it['p_deg']) * AXIS_FLIP_P
+        p = c4d.utils.DegToRad(it['p_deg'] * AXIS_FLIP_P + BASE_PITCH_OFFSET_DEG)
         b = c4d.utils.DegToRad(it['b_deg']) * AXIS_FLIP_B
         plane[c4d.ID_BASEOBJECT_REL_ROTATION] = c4d.Vector(h, p, b)
 
