@@ -1529,6 +1529,15 @@ ROTATION NOTE (please read)
   entries) — that gives the exact name for your version. Send that over
   and this can be hardcoded correctly next time.
 
+POSITION / FACING NOTE
+  Cinema 4D's left-handed coordinate space mirrors the X axis compared to
+  the PXLMAPPER 3D view (right-handed) — X is negated on import to correct
+  for this, and screens get a 180-degree Heading turn (HEADING_OFFSET_DEG
+  below) to face the right way after that mirror. Both were tuned against
+  real output, not just theory, so they should hold up — but if a future
+  layout ever looks mirrored or backwards again, these two constants are
+  the first place to check.
+
 MATERIAL NOTE
   Textures are applied on the Color channel of Cinema 4D's native Standard
   material, so it responds to scene lighting like any normal object — add
@@ -1545,6 +1554,10 @@ import os
 AXIS_FLIP_H = -1   # Heading  (was Y rotation in the 3D view)
 AXIS_FLIP_P = 1    # Pitch    (was X rotation in the 3D view)
 AXIS_FLIP_B = -1   # Bank     (was Z rotation in the 3D view)
+
+# Mirroring the X axis on import (see position note above) also flips which
+# way screens face — this turns them back around to the correct direction.
+HEADING_OFFSET_DEG = 180
 
 # Fallback only, used if no orientation parameter could be found below.
 BASE_PITCH_OFFSET_DEG = 90
@@ -1625,7 +1638,7 @@ def main():
             # no orientation parameter found - old rotation-only fallback
             p_residual = p_deg + BASE_PITCH_OFFSET_DEG
 
-        h = c4d.utils.DegToRad(it['h_deg']) * AXIS_FLIP_H
+        h = c4d.utils.DegToRad(it['h_deg'] * AXIS_FLIP_H + HEADING_OFFSET_DEG)
         p = c4d.utils.DegToRad(p_residual * AXIS_FLIP_P)
         b = c4d.utils.DegToRad(it['b_deg']) * AXIS_FLIP_B
         plane[c4d.ID_BASEOBJECT_REL_ROTATION] = c4d.Vector(h, p, b)
@@ -1678,7 +1691,9 @@ document.getElementById('btnExportC4DScene').onclick = async ()=>{
   const p1 = boardMode==='project' ? overviewProject : null;
   const items = planeMeshes3D.map(rec=>{
     const wCm = rec.w*100, hCm = rec.h*100;
-    const xCm = rec.group.position.x*100, yCm = rec.group.position.y*100, zCm = rec.group.position.z*100;
+    // Cinema 4D is left-handed vs three.js's right-handed scene, which mirrors
+    // the X axis on import — negate it here so X+ in PXLMAPPER stays X+ in C4D.
+    const xCm = -(rec.group.position.x*100), yCm = rec.group.position.y*100, zCm = rec.group.position.z*100;
     const hDeg = THREE.MathUtils.radToDeg(rec.group.rotation.y);
     const pDeg = THREE.MathUtils.radToDeg(rec.group.rotation.x);
     const bDeg = THREE.MathUtils.radToDeg(rec.group.rotation.z);
